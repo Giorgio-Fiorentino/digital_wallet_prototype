@@ -1,93 +1,98 @@
 import streamlit as st
 import pandas as pd
 import os
-import plotly.express as px # Usiamo Plotly per grafici più belli e interattivi
+import plotly.express as px
 from models.categorizer import TransactionAI
 
+# Initialize AI logic
 ai = TransactionAI()
 
+# Page Setup - Apple Style
 st.set_page_config(page_title="Apple Wallet AI Extension", page_icon="💳", layout="wide")
 
-# Sidebar - Filtri Temporali e Carte
+# Sidebar - User Controls
 st.sidebar.header("Wallet Settings")
 card_filter = st.sidebar.multiselect(
-    "Cards in Wallet", 
+    "Active Cards", 
     ["Visa ...1234", "Amex ...5678", "Apple Card"], 
     default=["Visa ...1234", "Amex ...5678"]
 )
-date_range = st.sidebar.date_input("Filter by Date", [])
+date_range = st.sidebar.date_input("Select Date Range", [])
 
-# Caricamento Dati
+# Data Pipeline: Loading and Filtering
 csv_path = "data/transactions.csv"
 if os.path.exists(csv_path):
     df = pd.read_csv(csv_path)
-    df['Date'] = pd.to_datetime(df['Date']) # Assicuriamoci che sia in formato data
+    df['Date'] = pd.to_datetime(df['Date'])
     
-    # Filtro per Carta
+    # Apply Card Filter
     df = df[df['Card'].isin(card_filter)]
     
-    # Filtro per Data (se selezionata)
+    # Apply Date Filter (if range is selected)
     if len(date_range) == 2:
         start_date, end_date = pd.to_datetime(date_range[0]), pd.to_datetime(date_range[1])
         df = df[(df['Date'] >= start_date) & (df['Date'] <= end_date)]
 else:
-    st.error("CSV non trovato!")
+    st.error("Transaction data not found! Please run the generator.")
     st.stop()
 
-# --- TABS ---
-tab_wallet, tab_home, tab_ai = st.tabs(["🗂️ My Wallet", "📊 Home Analysis", "🤖 AI Feedback"])
+# --- NAVIGATION TABS ---
+tab_wallet, tab_home, tab_ai = st.tabs(["🗂️ My Wallet", "📊 Spending Analysis", "🤖 AI Training"])
 
-# 1. TAB WALLET: Estensione Apple Wallet
+# 1. TAB WALLET: Apple Wallet Experience
 with tab_wallet:
     st.subheader("Your Digital Cards & Passes")
-    
     col_cards, col_passes = st.columns(2)
     
     with col_cards:
-        st.markdown("### Payment Cards")
+        st.markdown("### Payment Methods")
         for card in card_filter:
             with st.container():
-                st.info(f"💳 **{card}**\n\nActive and Ready for Apple Pay")
+                st.info(f"💳 **{card}**\n\nStatus: Active | Region: Europe")
     
     with col_passes:
-        st.markdown("### Passes & Boarding Passes")
+        st.markdown("### Boarding Passes")
         with st.container():
-            st.warning("✈️ **Ryanair - FR8342**\n\n**Barcelona (BCN) ➔ Palermo (PMO)**\n\nGate: B22 | Seat: 12F")
+            # Representing the user's specific trip context
+            st.warning("✈️ **Ryanair - Flight FR8342**\n\n**Barcelona (BCN) ➔ Palermo (PMO)**\n\nGate: B22 | Seat: 12F | Date: Tomorrow")
 
-# 2. TAB HOME ANALYSIS: Grafici e Transazioni
+# 2. TAB HOME: Analytics (Pie & Bar Charts)
 with tab_home:
-    st.subheader("Spending Overview")
+    st.subheader("Unified Financial Insights")
     
-    # Prepariamo i dati categorizzati per i grafici
+    # Process categories using our AI model
     df[['Category', 'Conf', 'Feedback']] = df.apply(
         lambda row: pd.Series(ai.predict_category(row['Raw_Description'])), axis=1
     )
     
-    # Layout a due colonne per i grafici
+    # Layout for Charts
     c1, c2 = st.columns(2)
     
     with c1:
-        st.markdown("#### Category Distribution (Pie)")
-        fig_pie = px.pie(df, values='Amount', names='Category', hole=0.4,
-                         color_discrete_sequence=px.colors.qualitative.Pastel)
+        st.markdown("#### Spending by Category (Share)")
+        fig_pie = px.pie(df, values='Amount', names='Category', hole=0.5,
+                         color_discrete_sequence=px.colors.qualitative.Safe)
         st.plotly_chart(fig_pie, use_container_width=True)
         
     with c2:
-        st.markdown("#### Spending per Category (Bar)")
+        st.markdown("#### Spending Volume (€)")
         fig_bar = px.bar(df.groupby('Category')['Amount'].sum().reset_index(), 
                          x='Category', y='Amount', color='Category',
-                         color_discrete_sequence=px.colors.qualitative.Pastel)
+                         color_discrete_sequence=px.colors.qualitative.Safe)
         st.plotly_chart(fig_bar, use_container_width=True)
 
-    st.markdown("#### Filtered Transactions")
+    st.markdown("#### Detailed Transaction History")
     st.dataframe(df[['Date', 'Raw_Description', 'Amount', 'Card', 'Category']], use_container_width=True)
 
-# 3. TAB AI FEEDBACK (Adattata)
+# 3. TAB AI TRAINING: The Human-in-the-Loop Feedback
 with tab_ai:
-    st.header("AI Training Center")
-    needs_f = df[df['Feedback'] == True]
-    if not needs_f.empty:
-        st.write("Confirm categorization for low-confidence transactions:")
-        st.data_editor(needs_f[['Raw_Description', 'Category', 'Conf']])
+    st.header("AI Feedback Center")
+    needs_feedback = df[df['Feedback'] == True]
+    if not needs_feedback.empty:
+        st.write("The AI is uncertain about these transactions. Please manually verify:")
+        # Widget usage: Data Editor for interactive feedback
+        st.data_editor(needs_feedback[['Raw_Description', 'Category', 'Conf']])
+        if st.button("Submit Corrections"):
+            st.success("Model updated locally! (Prototype Simulation)")
     else:
-        st.success("All transactions accurately categorized by AI!")
+        st.success("AI confidence is optimal across all filtered data.")
