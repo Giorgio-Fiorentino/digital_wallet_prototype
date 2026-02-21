@@ -1,93 +1,93 @@
 import streamlit as st
 import pandas as pd
 import os
+import plotly.express as px # Usiamo Plotly per grafici più belli e interattivi
 from models.categorizer import TransactionAI
 
-# Initialize the AI Engine
 ai = TransactionAI()
 
-# Page Configuration (Professional Appearance)
-st.set_page_config(page_title="Apple Wallet AI+", page_icon="💳", layout="wide")
+st.set_page_config(page_title="Apple Wallet AI Extension", page_icon="💳", layout="wide")
 
-# Custom CSS for a "Wallet" aesthetic (Bonus for Appearance/UX) [cite: 15, 16]
-st.markdown("""
-    <style>
-    .main { background-color: #f5f5f7; }
-    .stMetric { background-color: #ffffff; padding: 15px; border-radius: 15px; box-shadow: 0 2px 4px rgba(0,0,0,0.05); }
-    </style>
-    """, unsafe_allow_html=True)
-
-st.title("💳 Multi-Card Wallet AI")
-st.write("Aggregate, categorize, and forecast your spending in one place.")
-
-# Sidebar for Filters (Widgets: Multiselect and Date Input) 
-st.sidebar.header("Dashboard Filters")
+# Sidebar - Filtri Temporali e Carte
+st.sidebar.header("Wallet Settings")
 card_filter = st.sidebar.multiselect(
-    "Select Cards", 
+    "Cards in Wallet", 
     ["Visa ...1234", "Amex ...5678", "Apple Card"], 
     default=["Visa ...1234", "Amex ...5678"]
 )
-date_range = st.sidebar.date_input("Analysis Period", [])
+date_range = st.sidebar.date_input("Filter by Date", [])
 
-# LAYOUT: Using Tabs for organization (Requirement: Well-organized layout) 
-tab_home, tab_ai, tab_feedback = st.tabs(["🏠 Home", "🤖 AI Insights", "⚙️ Feedback Loop"])
-
-# Data Pipeline: Loading the dataset 
+# Caricamento Dati
 csv_path = "data/transactions.csv"
 if os.path.exists(csv_path):
     df = pd.read_csv(csv_path)
-    # Filter by card selection
+    df['Date'] = pd.to_datetime(df['Date']) # Assicuriamoci che sia in formato data
+    
+    # Filtro per Carta
     df = df[df['Card'].isin(card_filter)]
+    
+    # Filtro per Data (se selezionata)
+    if len(date_range) == 2:
+        start_date, end_date = pd.to_datetime(date_range[0]), pd.to_datetime(date_range[1])
+        df = df[(df['Date'] >= start_date) & (df['Date'] <= end_date)]
 else:
-    st.error("Data not found. Please run the data generation script first.")
+    st.error("CSV non trovato!")
     st.stop()
 
-# --- TAB HOME ---
+# --- TABS ---
+tab_wallet, tab_home, tab_ai = st.tabs(["🗂️ My Wallet", "📊 Home Analysis", "🤖 AI Feedback"])
+
+# 1. TAB WALLET: Estensione Apple Wallet
+with tab_wallet:
+    st.subheader("Your Digital Cards & Passes")
+    
+    col_cards, col_passes = st.columns(2)
+    
+    with col_cards:
+        st.markdown("### Payment Cards")
+        for card in card_filter:
+            with st.container():
+                st.info(f"💳 **{card}**\n\nActive and Ready for Apple Pay")
+    
+    with col_passes:
+        st.markdown("### Passes & Boarding Passes")
+        with st.container():
+            st.warning("✈️ **Ryanair - FR8342**\n\n**Barcelona (BCN) ➔ Palermo (PMO)**\n\nGate: B22 | Seat: 12F")
+
+# 2. TAB HOME ANALYSIS: Grafici e Transazioni
 with tab_home:
-    col1, col2, col3 = st.columns(3)
-    total_spent = df['Amount'].sum()
+    st.subheader("Spending Overview")
     
-    # Widget: Metrics for immediate value 
-    col1.metric("Total Spent", f"€ {total_spent:,.2f}")
-    col2.metric("Transactions", len(df))
-    col3.metric("Remaining Budget", "€ 450.00", delta="-12%", delta_color="inverse")
-
-    st.subheader("Recent Transactions")
-    st.dataframe(df, use_container_width=True)
-
-# --- TAB AI INSIGHTS ---
-with tab_ai:
-    st.header("AI Predictive Analysis")
-    
-    # Apply AI categorization on the fly (Pipeline & Accuracy) 
-    df[['Category', 'Confidence', 'Feedback_Req']] = df.apply(
+    # Prepariamo i dati categorizzati per i grafici
+    df[['Category', 'Conf', 'Feedback']] = df.apply(
         lambda row: pd.Series(ai.predict_category(row['Raw_Description'])), axis=1
     )
     
-    col_chart, col_info = st.columns([2, 1])
+    # Layout a due colonne per i grafici
+    c1, c2 = st.columns(2)
     
-    with col_chart:
-        # Widget: Bar Chart for category distribution
-        cat_dist = df.groupby('Category')['Amount'].sum()
-        st.bar_chart(cat_dist)
-    
-    with col_info:
-        st.info("💡 **AI Insight:** Your highest spending is in 'Shopping'. You could save €50 by limiting Amazon purchases this month.")
-
-# --- TAB FEEDBACK LOOP (The heart of your Prototype) ---
-with tab_feedback:
-    st.header("Train the AI")
-    st.write("The following transactions have low confidence scores. Please confirm the correct category:")
-    
-    # Filter transactions requiring feedback (Active Learning)
-    feedback_df = df[df['Feedback_Req'] == True][['Raw_Description', 'Category', 'Confidence']]
-    
-    if not feedback_df.empty:
-        # Widget: Data Editor (Advanced interaction) [cite: 13, 15]
-        edited_df = st.data_editor(feedback_df, num_rows="dynamic", use_container_width=True)
+    with c1:
+        st.markdown("#### Category Distribution (Pie)")
+        fig_pie = px.pie(df, values='Amount', names='Category', hole=0.4,
+                         color_discrete_sequence=px.colors.qualitative.Pastel)
+        st.plotly_chart(fig_pie, use_container_width=True)
         
-        if st.button("Save Corrections"):
-            st.success("The AI has learned from your corrections! (Simulated)")
-            st.balloons()
+    with c2:
+        st.markdown("#### Spending per Category (Bar)")
+        fig_bar = px.bar(df.groupby('Category')['Amount'].sum().reset_index(), 
+                         x='Category', y='Amount', color='Category',
+                         color_discrete_sequence=px.colors.qualitative.Pastel)
+        st.plotly_chart(fig_bar, use_container_width=True)
+
+    st.markdown("#### Filtered Transactions")
+    st.dataframe(df[['Date', 'Raw_Description', 'Amount', 'Card', 'Category']], use_container_width=True)
+
+# 3. TAB AI FEEDBACK (Adattata)
+with tab_ai:
+    st.header("AI Training Center")
+    needs_f = df[df['Feedback'] == True]
+    if not needs_f.empty:
+        st.write("Confirm categorization for low-confidence transactions:")
+        st.data_editor(needs_f[['Raw_Description', 'Category', 'Conf']])
     else:
-        st.success("The AI is confident about all current transactions!")
+        st.success("All transactions accurately categorized by AI!")
