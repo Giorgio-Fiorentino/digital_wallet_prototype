@@ -28,27 +28,33 @@ months_map = {
 selected_month = st.sidebar.selectbox("Select Month", ["All"] + list(months_map.keys()))
 
 # 2. Dynamic Date Range Default
-current_year = datetime.datetime.now().year
+today = datetime.date.today()
 
-if selected_month != "All":
-    # Set the default calendar view to the 1st of the selected month
-    month_num = months_map[selected_month]
-    default_date = datetime.date(current_year, month_num, 1)
+if selected_month == "Current Month":
+    # Default view: From the 1st of this month until today
+    start_default = datetime.date(today.year, today.month, 1)
+    end_default = today
+elif selected_month == "All":
+    # Show a wider range if needed (e.g., last 30 days)
+    start_default = today - datetime.timedelta(days=30)
+    end_default = today
 else:
-    # Standard default (today)
-    default_date = datetime.date.today()
+    # Focus the calendar on the 1st day of the manually selected month
+    month_num = months_map[selected_month]
+    start_default = datetime.date(today.year, month_num, 1)
+    end_default = datetime.date(today.year, month_num, 7) # Show the first week by default
 
-# 3. Date Input Widget
-# We use 'value' to force the calendar to the correct month
+# 4. Date Input Widget
 date_range = st.sidebar.date_input(
     "Select Date Range", 
-    value=[default_date, default_date + datetime.timedelta(days=6)], # Default 1 week range
+    value=[start_default, end_default],
     format="YYYY/MM/DD"
 )
 
-if st.sidebar.button("Reset Filters 🔄"):
+# 5. Reset Action
+if st.sidebar.button("Reset to Default 🔄"):
     st.rerun()
-    
+
 # Data Pipeline: Loading and Filtering
 csv_path = "data/transactions.csv"
 if os.path.exists(csv_path):
