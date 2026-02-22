@@ -25,14 +25,14 @@ months_map = {
     "May": 5, "June": 6, "July": 7, "August": 8, 
     "September": 9, "October": 10, "November": 11, "December": 12
 }
-selected_month_name = st.sidebar.selectbox("Select Month", ["All"] + list(months_map.keys()))
+selected_month = st.sidebar.selectbox("Select Month", ["All"] + list(months_map.keys()))
 
 # 2. Dynamic Date Range Default
 current_year = datetime.datetime.now().year
 
-if selected_month_name != "All":
+if selected_month != "All":
     # Set the default calendar view to the 1st of the selected month
-    month_num = months_map[selected_month_name]
+    month_num = months_map[selected_month]
     default_date = datetime.date(current_year, month_num, 1)
 else:
     # Standard default (today)
