@@ -12,7 +12,9 @@ class TransactionAI:
             "UBER TRIP": "Transport",
             "ESSELUNGA MILANO": "Groceries",
             "NETFLIX.COM": "Subscriptions",
-            "SHELL REFUEL": "Transport"
+            "SHELL REFUEL": "Transport",
+            "LANDLORD RENT": "Rent",
+            "ENEL ENERGY": "Utilities"
         }
         self.vectorizer = TfidfVectorizer()
 
@@ -23,11 +25,11 @@ class TransactionAI:
         all_texts = known_desc + [description]
         tfidf_matrix = self.vectorizer.fit_transform(all_texts)
         
-        # Calcolo similarità
+        # Similarity calculus
         similarity = cosine_similarity(tfidf_matrix[-1], tfidf_matrix[:-1])
         max_sim = similarity.max()
         
-        # LOGICA PER I WIDGET (FEEDBACK LOOP)
+        # FEEDBACK LOOP
         if max_sim > 0.75: # Soglia di confidenza alta
             return known_cats[similarity.argmax()], max_sim, False
         else:
@@ -39,3 +41,6 @@ class TransactionAI:
         if df.empty: return 0.0
         daily_avg = df['Amount'].sum() / 30 # Semplificazione per prototipo
         return round(daily_avg * 30, 2)
+    
+    def train_model(self, description, category):
+        self.knowledge_base[description.upper()] = category

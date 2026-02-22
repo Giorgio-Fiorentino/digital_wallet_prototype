@@ -17,6 +17,9 @@ card_filter = st.sidebar.multiselect(
     ["Visa ...1234", "Amex ...5678", "Apple Card"], 
     default=["Visa ...1234", "Amex ...5678"]
 )
+
+months = ["All", "January", "February", "March", "April", "May", "June"]
+selected_month = st.sidebar.selectbox("Select Month", months)
 date_range = st.sidebar.date_input("Select Date Range", [])
 
 # Data Pipeline: Loading and Filtering
@@ -24,10 +27,15 @@ csv_path = "data/transactions.csv"
 if os.path.exists(csv_path):
     df = pd.read_csv(csv_path)
     df['Date'] = pd.to_datetime(df['Date'])
+    df['Month'] = df['Date'].dt.month_name()
     
     # Apply Card Filter
     df = df[df['Card'].isin(card_filter)]
     
+    # Apply Month Filter
+    if selected_month != "All":
+        df = df[df['Month'] == selected_month]
+
     # Apply Date Filter (if range is selected)
     if len(date_range) == 2:
         start_date, end_date = pd.to_datetime(date_range[0]), pd.to_datetime(date_range[1])
@@ -37,7 +45,7 @@ else:
     st.stop()
 
 # --- NAVIGATION TABS ---
-tab_wallet, tab_home, tab_ai = st.tabs(["🗂️ My Wallet", "📊 Spending Analysis", "🤖 AI Training"])
+tab_wallet, tab_home, tab_ai = st.tabs(["🗂️ My Wallet", "📊 Spending Analysis", "🤖 Augment your wallet"])
 
 # 1. TAB WALLET: Apple Wallet Experience
 with tab_wallet:
@@ -84,43 +92,67 @@ with tab_home:
     st.markdown("#### Detailed Transaction History")
     st.dataframe(df[['Date', 'Raw_Description', 'Amount', 'Card', 'Category']], use_container_width=True)
 
+    st.divider()
+    st.subheader("Monthly Comparison")
+    # Group by month for the visual proof of behavior
+    monthly_trend = df.groupby('Month')['Amount'].sum().reset_index()
+    fig_trend = px.line(monthly_trend, x='Month', y='Amount', markers=True, title="Spending Behavior over Time")
+    st.plotly_chart(fig_trend, use_container_width=True)
+
 # 3. TAB AI TRAINING: The Human-in-the-Loop Feedback
 with tab_ai:
     st.header("AI Training Center")
-    
-    # --- SUB-SECTION 1: Active Learning (Automated) ---
+    st.write("Customize your categories and refine the AI's accuracy through feedback.")
+
+    # --- SUB-SECTION 1: Define New Categories ---
+    with st.expander("➕ Define New Custom Category"):
+        new_cat_name = st.text_input("Category Name (e.g., Hobbies)")
+        new_cat_desc = st.text_area("Description (Help the AI understand context)")
+        if st.button("Add Category"):
+            # This demonstrates the 'Purpose of the prototype' (Slide 54/Lecture 1)
+            st.success(f"Category '{new_cat_name}' registered!")
+
+    st.divider()
+
+    # --- SUB-SECTION 2: Active Learning (Automated Review) ---
     st.subheader("⚠️ Uncertain Transactions")
+    st.caption("The AI flagged these for review based on a low confidence score.")
+    
+    # Filtering based on the AI logic in categorizer.py
     needs_feedback = df[df['Feedback_Req'] == True]
     
     if not needs_feedback.empty:
         for index, row in needs_feedback.iterrows():
-            with st.expander(f"Review: {row['Raw_Description']}"):
+            with st.expander(f"Review Required: {row['Raw_Description']}"):
                 c1, c2 = st.columns(2)
-                c1.write(f"Proposed: **{row['Category']}** (Conf: {int(row['Confidence']*100)}%)")
+                c1.write(f"AI Suggestion: **{row['Category']}**")
+                c1.progress(row['Confidence'], text=f"Confidence: {int(row['Confidence']*100)}%")
+                
                 if c2.button("Confirm ✅", key=f"btn_{index}"):
-                    st.success("Confirmed!")
+                    st.success("Training data updated!")
     else:
-        st.info("No uncertain transactions found.")
+        st.info("No uncertain transactions found. The model is performing well!")
 
     st.divider()
 
-    # --- SUB-SECTION 2: Manual Training (User Input) ---
+    # --- SUB-SECTION 3: Manual Model Training (User Input) ---
     st.subheader("✍️ Manual Model Training")
-    st.write("Is a category wrong? Train the model manually.")
+    st.write("Force a specific classification for a merchant or description.")
     
     col_input, col_cat, col_action = st.columns([2, 1, 1])
     
     with col_input:
-        # User selects any transaction from the dataset
-        target_desc = st.selectbox("Select Transaction Description", df['Raw_Description'].unique())
+        # User selects any transaction description from the dataset
+        target_desc = st.selectbox("Select Description", df['Raw_Description'].unique())
     
     with col_cat:
-        # User defines the correct category
-        manual_cat = st.selectbox("Correct Category", ["Food", "Shopping", "Transport", "Travel", "Subscriptions"])
+        # Manual selection of the 'Ground Truth'
+        manual_cat = st.selectbox("Correct Category", ["Food", "Shopping", "Transport", "Rent", "Utilities", "Others"])
         
     with col_action:
-        st.write(" ") # Spacer
+        st.write(" ") # Spacer for alignment
         if st.button("Train Model 🚀"):
-            # Logic: Update the knowledge base (Simulated for Prototype)
-            st.success(f"Model trained: '{target_desc}' is now '{manual_cat}'")
+            # This calls the predict_logic separated from the UI (Slide 20)
+            ai.train_model(target_desc, manual_cat)
+            st.success(f"AI updated: '{target_desc}' is now '{manual_cat}'")
             st.balloons()
