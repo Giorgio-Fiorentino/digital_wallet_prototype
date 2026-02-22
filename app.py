@@ -3,6 +3,7 @@ import pandas as pd
 import os
 import plotly.express as px
 from models.categorizer import TransactionAI
+import datetime
 
 # Initialize AI logic
 ai = TransactionAI()
@@ -18,9 +19,32 @@ card_filter = st.sidebar.multiselect(
     default=["Visa ...1234", "Amex ...5678"]
 )
 
-months = ["All", "January", "February", "March", "April", "May", "June"]
-selected_month = st.sidebar.selectbox("Select Month", months)
-date_range = st.sidebar.date_input("Select Date Range", [])
+# And date selection
+months_map = {
+    "January": 1, "February": 2, "March": 3, "April": 4, 
+    "May": 5, "June": 6, "July": 7, "August": 8, 
+    "September": 9, "October": 10, "November": 11, "December": 12
+}
+selected_month_name = st.sidebar.selectbox("Select Month", ["All"] + list(months_map.keys()))
+
+# 2. Dynamic Date Range Default
+current_year = datetime.datetime.now().year
+
+if selected_month_name != "All":
+    # Set the default calendar view to the 1st of the selected month
+    month_num = months_map[selected_month_name]
+    default_date = datetime.date(current_year, month_num, 1)
+else:
+    # Standard default (today)
+    default_date = datetime.date.today()
+
+# 3. Date Input Widget
+# We use 'value' to force the calendar to the correct month
+date_range = st.sidebar.date_input(
+    "Select Date Range", 
+    value=[default_date, default_date + datetime.timedelta(days=6)], # Default 1 week range
+    format="YYYY/MM/DD"
+)
 
 # Data Pipeline: Loading and Filtering
 csv_path = "data/transactions.csv"
