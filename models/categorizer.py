@@ -31,7 +31,7 @@ class TransactionAI:
         if max_sim > 0.75: # Soglia di confidenza alta
             return known_cats[similarity.argmax()], max_sim, False
         else:
-            return "Da Categorizzare", max_sim, True
+            return "Others", max_sim, True
 
     # NUOVA FEATURE: Analisi Budget (Prediction)
     def predict_monthly_burn(self, df):
