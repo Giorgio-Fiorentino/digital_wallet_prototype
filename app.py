@@ -46,6 +46,9 @@ date_range = st.sidebar.date_input(
     format="YYYY/MM/DD"
 )
 
+if st.sidebar.button("Reset Filters 🔄"):
+    st.rerun()
+    
 # Data Pipeline: Loading and Filtering
 csv_path = "data/transactions.csv"
 if os.path.exists(csv_path):
