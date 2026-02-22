@@ -61,7 +61,7 @@ with tab_home:
     st.subheader("Unified Financial Insights")
     
     # Process categories using our AI model
-    df[['Category', 'Conf', 'Feedback']] = df.apply(
+    df[['Category', 'Confidence', 'Feedback_Req']] = df.apply(
         lambda row: pd.Series(ai.predict_category(row['Raw_Description'])), axis=1
     )
     
