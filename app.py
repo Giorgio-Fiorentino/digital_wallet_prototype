@@ -86,13 +86,41 @@ with tab_home:
 
 # 3. TAB AI TRAINING: The Human-in-the-Loop Feedback
 with tab_ai:
-    st.header("AI Feedback Center")
-    needs_feedback = df[df['Feedback'] == True]
+    st.header("AI Training Center")
+    
+    # --- SUB-SECTION 1: Active Learning (Automated) ---
+    st.subheader("⚠️ Uncertain Transactions")
+    needs_feedback = df[df['Feedback_Req'] == True]
+    
     if not needs_feedback.empty:
-        st.write("The AI is uncertain about these transactions. Please manually verify:")
-        # Widget usage: Data Editor for interactive feedback
-        st.data_editor(needs_feedback[['Raw_Description', 'Category', 'Conf']])
-        if st.button("Submit Corrections"):
-            st.success("Model updated locally! (Prototype Simulation)")
+        for index, row in needs_feedback.iterrows():
+            with st.expander(f"Review: {row['Raw_Description']}"):
+                c1, c2 = st.columns(2)
+                c1.write(f"Proposed: **{row['Category']}** (Conf: {int(row['Confidence']*100)}%)")
+                if c2.button("Confirm ✅", key=f"btn_{index}"):
+                    st.success("Confirmed!")
     else:
-        st.success("AI confidence is optimal across all filtered data.")
+        st.info("No uncertain transactions found.")
+
+    st.divider()
+
+    # --- SUB-SECTION 2: Manual Training (User Input) ---
+    st.subheader("✍️ Manual Model Training")
+    st.write("Is a category wrong? Train the model manually.")
+    
+    col_input, col_cat, col_action = st.columns([2, 1, 1])
+    
+    with col_input:
+        # User selects any transaction from the dataset
+        target_desc = st.selectbox("Select Transaction Description", df['Raw_Description'].unique())
+    
+    with col_cat:
+        # User defines the correct category
+        manual_cat = st.selectbox("Correct Category", ["Food", "Shopping", "Transport", "Travel", "Subscriptions"])
+        
+    with col_action:
+        st.write(" ") # Spacer
+        if st.button("Train Model 🚀"):
+            # Logic: Update the knowledge base (Simulated for Prototype)
+            st.success(f"Model trained: '{target_desc}' is now '{manual_cat}'")
+            st.balloons()
