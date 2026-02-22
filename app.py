@@ -69,9 +69,19 @@ with tab_home:
     st.subheader("Unified Financial Insights")
     
     # Process categories using our AI model
-    df[['Category', 'Confidence', 'Feedback_Req']] = df.apply(
+    if not df.empty:
+    # Use a lambda to apply your predict_category method
+    # Ensure the method returns exactly 3 values: (Category, Confidence, Feedback_Req)
+        df[['Category', 'Confidence', 'Feedback_Req']] = df.apply(
         lambda row: pd.Series(ai.predict_category(row['Raw_Description'])), axis=1
     )
+    
+    else:
+    # Create empty columns if df is empty to prevent downstream errors in charts
+        st.warning("No transactions found for the selected filters.")
+        df['Category'] = None
+        df['Confidence'] = None
+        df['Feedback_Req'] = False
     
     # Layout for Charts
     c1, c2 = st.columns(2)
@@ -93,11 +103,40 @@ with tab_home:
     st.dataframe(df[['Date', 'Raw_Description', 'Amount', 'Card', 'Category']], use_container_width=True)
 
     st.divider()
-    st.subheader("Monthly Comparison")
-    # Group by month for the visual proof of behavior
-    monthly_trend = df.groupby('Month')['Amount'].sum().reset_index()
-    fig_trend = px.line(monthly_trend, x='Month', y='Amount', markers=True, title="Spending Behavior over Time")
-    st.plotly_chart(fig_trend, use_container_width=True)
+    st.subheader("Monthly Comparison Analysis")
+    st.write("Compare your spending habits across different months.")
+
+    # Widget: Category Selector for the Trend Chart
+    # We use all unique categories found after AI processing
+    available_categories = df['Category'].unique().tolist()
+    compare_cats = st.multiselect(
+        "Select Categories to Compare", 
+        options=available_categories, 
+        default=available_categories[:3] # Default to first 3 to keep it clean
+    )
+
+    if compare_cats:
+        # Filter data for selected categories
+        trend_df = df[df['Category'].isin(compare_cats)]
+        
+        # Group by Month and Category to see the split in the line chart
+        # We ensure months are sorted chronologically if possible
+        monthly_trend = trend_df.groupby(['Month', 'Category'])['Amount'].sum().reset_index()
+        
+        # Plotly Line Chart with 'color' parameter to show different lines per category
+        fig_trend = px.line(
+            monthly_trend, 
+            x='Month', 
+            y='Amount', 
+            color='Category', 
+            markers=True,
+            title="Spending Trend by Category",
+            labels={"Amount": "Total Spent (€)", "Month": "Month"}
+        )
+        
+        st.plotly_chart(fig_trend, use_container_width=True)
+    else:
+        st.warning("Please select at least one category to view the trend.")
 
 # 3. TAB AI TRAINING: The Human-in-the-Loop Feedback
 with tab_ai:
