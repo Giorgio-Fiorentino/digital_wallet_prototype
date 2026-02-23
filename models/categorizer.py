@@ -5,7 +5,7 @@ from sklearn.metrics.pairwise import cosine_similarity
 
 class TransactionAI:
     def __init__(self):
-        # Database espanso per coprire più categorie
+        # Basic Database development
         self.knowledge_base = {
             "AMZN MKTPLACE": "Shopping",
             "STARBUCKS COFFEE": "Food",
@@ -35,11 +35,11 @@ class TransactionAI:
         else:
             return "Others", max_sim, True
 
-    # NUOVA FEATURE: Analisi Budget (Prediction)
+    # NEW FEATURE: Budget Analysis (Prediction)
     def predict_monthly_burn(self, df):
-        """Semplice modello predittivo: calcola la media e prevede la spesa fine mese"""
+        """Simple predictive model: calculates the average and predicts end-of-month spending"""
         if df.empty: return 0.0
-        daily_avg = df['Amount'].sum() / 30 # Semplificazione per prototipo
+        daily_avg = df['Amount'].sum() / 30 # Simplification for prototype
         return round(daily_avg * 30, 2)
     
     def train_model(self, description, category):

@@ -2,7 +2,7 @@ import pandas as pd
 import random
 from datetime import datetime, timedelta
 
-# Dati sporchi per testare l'AI
+# Fake data generation for transactions
 vendors = {
     "AMZN MKTPLACE": "Shopping",
     "STARBUCKS COFFEE": "Food",
@@ -23,4 +23,4 @@ for i in range(50):
 df = pd.DataFrame(data, columns=["Date", "Raw_Description", "Amount", "Card"])
 df.head()
 df.to_csv("data/transactions.csv", index=False)
-print("✅ File data/transactions.csv generato con successo!")
+print("✅ File data/transactions.csv successfully created!")
