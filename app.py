@@ -116,6 +116,9 @@ with tab_home:
         df['Confidence'] = None
         df['Feedback_Req'] = False
     
+    total_spent = df['Amount'].sum()
+    st.metric(label="Total Expenses", value=f"€ {total_spent:,.2f}")
+    
     # Layout for Charts
     c1, c2 = st.columns(2)
     
