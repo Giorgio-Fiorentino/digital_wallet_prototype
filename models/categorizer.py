@@ -5,7 +5,7 @@ from sklearn.metrics.pairwise import cosine_similarity
 
 class TransactionAI:
     def __init__(self):
-        # Basic Database development
+        # KNOWLEDGE BASE: A simple mapping of known descriptions to categories
         self.knowledge_base = {
             "AMZN MKTPLACE": "Shopping",
             "STARBUCKS COFFEE": "Food",
