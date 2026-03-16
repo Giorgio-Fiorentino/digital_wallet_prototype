@@ -5,7 +5,6 @@
 
 # KAGGLE & DATA
 data/raw/
-data/processed/
 
 # VIRTUAL ENV
 wallet_venv/
