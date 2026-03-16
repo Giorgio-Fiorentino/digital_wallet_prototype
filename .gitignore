@@ -1,9 +1,23 @@
-wallet_env/
+# SECRETS
+.env
+*.env
+.streamlit/secrets.toml
+
+# KAGGLE & DATA
+data/raw/
+data/processed/
+
+# VIRTUAL ENV
+wallet_venv/
+
+# PYTHON
 __pycache__/
+*.pyc
+*.egg-info/
+
+# MACOS
 .DS_Store
-wallet_env/
-__pycache__/
-.DS_Store
-wallet_env/
-__pycache__/
-.DS_Store
+
+# IDE
+.vscode/
+.idea/
