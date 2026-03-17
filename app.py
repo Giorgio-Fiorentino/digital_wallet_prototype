@@ -13,7 +13,6 @@ import streamlit as st
 import pandas as pd
 import numpy as np
 import plotly.express as px
-import plotly.graph_objects as go
 import os
 from datetime import date
 from dotenv import load_dotenv
@@ -771,7 +770,7 @@ with tab_lab:
     if run_eval:
         with st.spinner("Evaluating TF-IDF…"):
             try:
-                tfidf_res = evaluate_categorizer(TFIDFCategorizer(), engine.df, sample_size)
+                tfidf_res = evaluate_categorizer(TFIDFCategorizer(engine.df), engine.df, sample_size)
                 st.session_state["tfidf_res"] = tfidf_res
 
                 if not tfidf_only:
@@ -779,7 +778,7 @@ with tab_lab:
                     if api_key and not api_key.startswith("your_"):
                         with st.spinner("Evaluating Cohere Embeddings…"):
                             embed_res = evaluate_categorizer(
-                                EmbeddingCategorizer(), engine.df, sample_size
+                                EmbeddingCategorizer(engine.df), engine.df, sample_size
                             )
                             st.session_state["embed_res"] = embed_res
                     else:
@@ -841,7 +840,7 @@ with tab_lab:
     )
 
     if st.button("🔍  Scan for Uncertain Transactions", key="scan_unc"):
-        cat    = TFIDFCategorizer()
+        cat    = TFIDFCategorizer(engine.df)
         sample = engine.df.sample(min(200, len(engine.df)), random_state=42)
         found  = []
         for _, row in sample.iterrows():

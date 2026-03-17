@@ -47,9 +47,16 @@ EMBEDDING_THRESHOLD = 0.30
 
 
 class TFIDFCategorizer:
-    def __init__(self):
+    def __init__(self, df=None):
         self.knowledge_base = KNOWLEDGE_BASE.copy()
         self.vectorizer     = TfidfVectorizer(ngram_range=(1, 2))
+        if df is not None:
+            # Seed from dataset: one representative entry per merchant
+            for desc, cat in (
+                df.drop_duplicates("Raw_Description")[["Raw_Description", "Category"]]
+                .values
+            ):
+                self.knowledge_base[str(desc).lower()] = str(cat)
 
     def predict(self, description: str) -> tuple:
         known_descs  = list(self.knowledge_base.keys())
@@ -58,7 +65,7 @@ class TFIDFCategorizer:
         tfidf_matrix = self.vectorizer.fit_transform(all_texts)
         similarity   = cosine_similarity(tfidf_matrix[-1], tfidf_matrix[:-1])
         max_sim      = float(similarity.max())
-        best_cat     = known_cats[similarity.argmax()]
+        best_cat     = known_cats[int(similarity.argmax())]
         if max_sim > TFIDF_THRESHOLD:
             return best_cat, max_sim, False
         return best_cat, max_sim, True
@@ -68,9 +75,15 @@ class TFIDFCategorizer:
 
 
 class EmbeddingCategorizer:
-    def __init__(self):
+    def __init__(self, df=None):
         self.client         = cohere.Client(api_key=os.getenv("COHERE_API_KEY"))
         self.knowledge_base = KNOWLEDGE_BASE.copy()
+        if df is not None:
+            for desc, cat in (
+                df.drop_duplicates("Raw_Description")[["Raw_Description", "Category"]]
+                .values
+            ):
+                self.knowledge_base[str(desc).lower()] = str(cat)
         self._kb_embeddings = None
         self._kb_texts      = []
         self._kb_categories = []
