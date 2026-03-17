@@ -37,127 +37,272 @@ st.set_page_config(
 # GLOBAL CSS — iOS / Apple Wallet aesthetic
 # ══════════════════════════════════════════════════════════════════════
 st.markdown("""
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 <style>
-/* ── Page ── */
-[data-testid="stAppViewContainer"] { background: #f2f2f7; }
-[data-testid="stSidebar"]          { background: #1c1c1e !important; }
-[data-testid="stSidebar"] *        { color: #f5f5f7 !important; }
+/* ── Global font ── */
+html, body, [class*="css"] {
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif !important;
+}
+
+/* ── Page background ── */
+[data-testid="stAppViewContainer"] {
+    background: #F6F9FC;
+}
+[data-testid="stMainBlockContainer"] {
+    padding-top: 1.5rem !important;
+}
+
+/* ── Sidebar ── */
+[data-testid="stSidebar"] {
+    background: #0A2540 !important;
+    border-right: none !important;
+}
+[data-testid="stSidebar"] * { color: #d0d8e4 !important; }
 [data-testid="stSidebar"] label,
-[data-testid="stSidebar"] p        { color: #98989d !important; }
+[data-testid="stSidebar"] p  { color: #7a92aa !important; }
+[data-testid="stSidebar"] h1,
+[data-testid="stSidebar"] h2,
+[data-testid="stSidebar"] h3 { color: #ffffff !important; }
 [data-testid="stSidebar"] .stButton > button {
-    background: #2c2c2e; border: 1px solid #3a3a3c; color: #f5f5f7 !important;
-    border-radius: 10px;
+    background: rgba(99,91,255,0.15);
+    border: 1px solid rgba(99,91,255,0.35);
+    color: #a5b4fc !important;
+    border-radius: 8px;
+    font-weight: 600;
+    transition: all .2s;
+}
+[data-testid="stSidebar"] .stButton > button:hover {
+    background: rgba(99,91,255,0.28);
+    border-color: #635BFF;
+    color: #ffffff !important;
 }
 [data-testid="stSidebar"] input[type="text"],
 [data-testid="stSidebar"] input[type="date"],
 [data-testid="stSidebar"] [data-testid="stDateInput"] input {
-    color: #1c1c1e !important;
+    color: #0A2540 !important;
     background: #ffffff !important;
+    border-radius: 6px !important;
+}
+[data-testid="stSidebar"] [data-testid="stMultiSelect"] > div {
+    background: #0f2e4a !important;
+    border-color: #1e4060 !important;
+}
+/* sidebar accent bar */
+[data-testid="stSidebar"]::before {
+    content: '';
+    display: block;
+    height: 3px;
+    background: linear-gradient(90deg, #635BFF 0%, #00D4FF 100%);
+    margin-bottom: 0;
+}
+
+/* ── Tabs ── */
+[data-testid="stTab"] > button {
+    font-weight: 600;
+    font-size: 14px;
+    color: #6b7c93 !important;
+    border-radius: 0 !important;
+    border-bottom: 2px solid transparent !important;
+    padding-bottom: 10px !important;
+}
+[data-testid="stTab"] > button[aria-selected="true"] {
+    color: #635BFF !important;
+    border-bottom: 2px solid #635BFF !important;
+    background: transparent !important;
 }
 
 /* ── Credit-card component ── */
 .cc-card {
-    border-radius: 20px;
-    padding: 22px 24px 18px;
+    border-radius: 18px;
+    padding: 24px 26px 20px;
     color: white;
-    min-height: 170px;
+    min-height: 175px;
     position: relative;
-    font-family: -apple-system, "SF Pro Display", BlinkMacSystemFont, sans-serif;
-    box-shadow: 0 14px 42px rgba(0,0,0,.26);
+    font-family: 'Inter', sans-serif;
+    box-shadow: 0 20px 60px rgba(10,37,64,.30), 0 4px 16px rgba(0,0,0,.12);
     overflow: hidden;
-    margin-bottom: 14px;
+    margin-bottom: 16px;
+    transition: transform .2s, box-shadow .2s;
+}
+.cc-card:hover {
+    transform: translateY(-3px);
+    box-shadow: 0 28px 72px rgba(10,37,64,.36), 0 8px 24px rgba(0,0,0,.14);
+}
+.cc-card::before {
+    content: '';
+    position: absolute;
+    top: -80px; right: -80px;
+    width: 240px; height: 240px;
+    border-radius: 50%;
+    background: rgba(255,255,255,.07);
 }
 .cc-card::after {
     content: '';
     position: absolute;
-    top: -55px; right: -55px;
-    width: 210px; height: 210px;
+    bottom: -50px; left: -30px;
+    width: 180px; height: 180px;
     border-radius: 50%;
-    background: rgba(255,255,255,.09);
+    background: rgba(255,255,255,.05);
 }
-.cc-chip  { width: 36px; height: 26px; background: rgba(255,255,255,.32);
-            border-radius: 5px; margin-bottom: 20px; }
-.cc-num   { font-size: 15px; letter-spacing: 3px; font-weight: 600; opacity: .88; }
-.cc-name  { font-size: 11px; opacity: .62; margin-top: 6px;
-            letter-spacing: 1.2px; text-transform: uppercase; }
-.cc-spend { position: absolute; top: 20px; right: 22px; text-align: right; }
-.cc-sl    { font-size: 10px; opacity: .58; text-transform: uppercase; letter-spacing: .5px; }
-.cc-sv    { font-size: 21px; font-weight: 700; }
+.cc-chip  {
+    width: 38px; height: 28px;
+    background: linear-gradient(135deg, rgba(255,255,255,.45), rgba(255,255,255,.2));
+    border-radius: 5px; margin-bottom: 22px;
+    border: 1px solid rgba(255,255,255,.3);
+}
+.cc-num   { font-size: 15px; letter-spacing: 4px; font-weight: 500; opacity: .9; }
+.cc-name  { font-size: 11px; opacity: .55; margin-top: 8px;
+            letter-spacing: 1.5px; text-transform: uppercase; font-weight: 600; }
+.cc-spend { position: absolute; top: 22px; right: 24px; text-align: right; }
+.cc-sl    { font-size: 10px; opacity: .55; text-transform: uppercase;
+            letter-spacing: .8px; font-weight: 600; }
+.cc-sv    { font-size: 22px; font-weight: 700; letter-spacing: -0.5px; }
 
 /* ── KPI tile ── */
 .kpi {
-    background: white; border-radius: 16px;
-    padding: 16px 20px; box-shadow: 0 2px 10px rgba(0,0,0,.06);
-    margin-bottom: 12px;
+    background: white;
+    border-radius: 14px;
+    padding: 20px 22px;
+    box-shadow: 0 1px 3px rgba(0,0,0,.04), 0 4px 16px rgba(0,0,0,.06);
+    border: 1px solid #E3E8EF;
+    margin-bottom: 14px;
+    position: relative;
+    overflow: hidden;
 }
-.kpi-lbl { font-size: 11px; color: #6e6e73; font-weight: 500;
-           text-transform: uppercase; letter-spacing: .5px; }
-.kpi-val { font-size: 28px; font-weight: 700; color: #1c1c1e;
-           letter-spacing: -1px; margin: 4px 0 2px; }
+.kpi::before {
+    content: '';
+    position: absolute;
+    left: 0; top: 0; bottom: 0;
+    width: 3px;
+    background: linear-gradient(180deg, #635BFF 0%, #00D4FF 100%);
+    border-radius: 3px 0 0 3px;
+}
+.kpi-lbl { font-size: 11px; color: #6b7c93; font-weight: 600;
+           text-transform: uppercase; letter-spacing: .7px; }
+.kpi-val { font-size: 30px; font-weight: 800; color: #0A2540;
+           letter-spacing: -1.5px; margin: 6px 0 3px; }
 .kpi-dlt { font-size: 12px; font-weight: 600; }
-.green   { color: #34c759; }
-.red     { color: #ff3b30; }
-.blue    { color: #007aff; }
+.green   { color: #00C853; }
+.red     { color: #F4364C; }
+.blue    { color: #635BFF; }
 
 /* ── Transaction row ── */
 .txn {
-    display: flex; align-items: center; gap: 12px;
-    padding: 11px 0; border-bottom: 1px solid #f2f2f7;
+    display: flex; align-items: center; gap: 13px;
+    padding: 12px 0; border-bottom: 1px solid #EEF2F7;
 }
 .txn:last-child { border-bottom: none; }
 .txn-ico {
-    width: 38px; height: 38px; border-radius: 50%;
-    background: #f2f2f7; display: flex; align-items: center;
-    justify-content: center; font-size: 16px; flex-shrink: 0;
+    width: 40px; height: 40px; border-radius: 12px;
+    background: linear-gradient(135deg, #F0EEFF, #E8F4FF);
+    display: flex; align-items: center;
+    justify-content: center; font-size: 17px; flex-shrink: 0;
+    border: 1px solid #E3E8EF;
 }
-.txn-nm  { font-weight: 600; font-size: 14px; color: #1c1c1e; }
-.txn-sub { font-size: 11px; color: #8e8e93; margin-top: 1px; }
+.txn-nm  { font-weight: 600; font-size: 14px; color: #0A2540; }
+.txn-sub { font-size: 11px; color: #8898aa; margin-top: 2px; font-weight: 500; }
 .txn-amt { margin-left: auto; font-weight: 700; font-size: 15px;
-           color: #1c1c1e; white-space: nowrap; }
+           color: #0A2540; white-space: nowrap; letter-spacing: -0.3px; }
 
 /* ── Panel (white rounded card) ── */
 .panel {
-    background: white; border-radius: 16px;
-    padding: 16px 20px; box-shadow: 0 2px 8px rgba(0,0,0,.05);
-    margin-bottom: 14px;
+    background: white;
+    border-radius: 14px;
+    padding: 18px 22px;
+    box-shadow: 0 1px 3px rgba(0,0,0,.04), 0 4px 16px rgba(0,0,0,.06);
+    border: 1px solid #E3E8EF;
+    margin-bottom: 16px;
 }
 
 /* ── Boarding pass ── */
-.bp  { background: white; border-radius: 18px; overflow: hidden;
-       box-shadow: 0 4px 20px rgba(0,0,0,.09); margin-bottom: 16px; }
-.bp-hdr { background: #1a73e8; color: white; padding: 15px 22px; }
-.bp-body { padding: 16px 22px; display: flex; gap: 28px; flex-wrap: wrap; }
-.bp-fl  { font-size: 10px; color: #8e8e93; text-transform: uppercase; letter-spacing: .5px; }
-.bp-fv  { font-size: 20px; font-weight: 700; color: #1c1c1e; }
-.bp-qr  { padding: 14px 22px; border-top: 2px dashed #e5e5ea;
+.bp {
+    background: white; border-radius: 16px; overflow: hidden;
+    box-shadow: 0 4px 24px rgba(0,0,0,.10); margin-bottom: 18px;
+    border: 1px solid #E3E8EF;
+}
+.bp-hdr {
+    background: linear-gradient(135deg, #0A2540 0%, #1a4a7a 100%);
+    color: white; padding: 16px 24px;
+}
+.bp-body { padding: 16px 24px; display: flex; gap: 28px; flex-wrap: wrap; }
+.bp-fl  { font-size: 10px; color: #8898aa; text-transform: uppercase;
+          letter-spacing: .7px; font-weight: 600; }
+.bp-fv  { font-size: 20px; font-weight: 700; color: #0A2540; }
+.bp-qr  { padding: 14px 24px; border-top: 2px dashed #E3E8EF;
           display: flex; align-items: center; gap: 14px; }
 
 /* ── Chat bubbles ── */
-.msg-wrap-u { display: flex; justify-content: flex-end; margin: 5px 0; }
-.msg-wrap-b { display: flex; justify-content: flex-start; margin: 5px 0; }
+.msg-wrap-u { display: flex; justify-content: flex-end; margin: 6px 0; }
+.msg-wrap-b { display: flex; justify-content: flex-start; margin: 6px 0; }
 .msg-u {
-    background: #007aff; color: white;
+    background: linear-gradient(135deg, #635BFF 0%, #5046e4 100%);
+    color: white;
     border-radius: 18px 18px 4px 18px;
-    padding: 10px 14px; max-width: 72%; font-size: 14px; line-height: 1.5;
+    padding: 11px 16px; max-width: 72%; font-size: 14px; line-height: 1.55;
+    box-shadow: 0 4px 16px rgba(99,91,255,.35);
 }
 .msg-b {
-    background: white; color: #1c1c1e;
+    background: white; color: #0A2540;
     border-radius: 18px 18px 18px 4px;
-    padding: 10px 14px; max-width: 80%; font-size: 14px; line-height: 1.5;
-    box-shadow: 0 2px 8px rgba(0,0,0,.07);
+    padding: 11px 16px; max-width: 80%; font-size: 14px; line-height: 1.55;
+    box-shadow: 0 2px 12px rgba(0,0,0,.08);
+    border: 1px solid #E3E8EF;
 }
-.msg-tag { font-size: 10px; color: #8e8e93; margin-top: 3px; padding-left: 4px; }
+.msg-tag {
+    font-size: 10px; color: #8898aa; margin-top: 4px;
+    padding-left: 4px; font-weight: 600; letter-spacing: .3px;
+}
 
 /* ── Anomaly alert ── */
 .anom {
-    background: #fff5f5; border-left: 4px solid #ff3b30;
-    border-radius: 10px; padding: 10px 14px; margin: 5px 0;
+    background: linear-gradient(135deg, #FFF5F5, #FFF0F0);
+    border-left: 3px solid #F4364C;
+    border-radius: 10px; padding: 12px 16px; margin: 6px 0;
+    border-top: 1px solid #FFE0E0;
+    border-right: 1px solid #FFE0E0;
+    border-bottom: 1px solid #FFE0E0;
 }
-.anom-d { font-weight: 600; font-size: 14px; color: #1c1c1e; }
-.anom-m { font-size: 11px; color: #8e8e93; margin-top: 3px; }
+.anom-d { font-weight: 700; font-size: 14px; color: #0A2540; }
+.anom-m { font-size: 11px; color: #8898aa; margin-top: 4px; font-weight: 500; }
 
-/* ── Tab styling ── */
-[data-testid="stTab"] > button { font-weight: 600; font-size: 14px; }
+/* ── Section headers ── */
+h3 { color: #0A2540 !important; font-weight: 700 !important; letter-spacing: -0.3px !important; }
+
+/* ── Metric boxes (Streamlit native) ── */
+[data-testid="stMetric"] {
+    background: white;
+    border: 1px solid #E3E8EF;
+    border-radius: 12px;
+    padding: 14px 18px !important;
+    box-shadow: 0 1px 3px rgba(0,0,0,.04);
+}
+[data-testid="stMetricLabel"] { color: #6b7c93 !important; font-size: 12px !important; font-weight: 600 !important; }
+[data-testid="stMetricValue"] { color: #0A2540 !important; font-weight: 800 !important; }
+
+/* ── Buttons (primary) ── */
+[data-testid="stButton"] > button[kind="primary"] {
+    background: linear-gradient(135deg, #635BFF 0%, #5046e4 100%) !important;
+    border: none !important;
+    color: white !important;
+    font-weight: 600 !important;
+    border-radius: 8px !important;
+    box-shadow: 0 4px 14px rgba(99,91,255,.35) !important;
+    transition: all .2s !important;
+}
+[data-testid="stButton"] > button[kind="primary"]:hover {
+    box-shadow: 0 6px 20px rgba(99,91,255,.45) !important;
+    transform: translateY(-1px) !important;
+}
+
+/* ── Expanders ── */
+[data-testid="stExpander"] {
+    border: 1px solid #E3E8EF !important;
+    border-radius: 10px !important;
+    background: white !important;
+}
+
+/* ── Divider ── */
+hr { border-color: #E3E8EF !important; }
 </style>
 """, unsafe_allow_html=True)
 
@@ -166,11 +311,11 @@ st.markdown("""
 # CONSTANTS
 # ══════════════════════════════════════════════════════════════════════
 CARD_GRADIENTS = {
-    "Visa Classic":   "linear-gradient(135deg,#1a1f71 0%,#4a90e2 100%)",
-    "Mastercard Gold":"linear-gradient(135deg,#7b4f12 0%,#d4a017 100%)",
-    "Revolut":        "linear-gradient(135deg,#191c1f 0%,#5a5e65 100%)",
-    "PayPal":         "linear-gradient(135deg,#003087 0%,#009cde 100%)",
-    "Trade Republic": "linear-gradient(135deg,#0a0a0a 0%,#1db954 100%)",
+    "Visa Classic":   "linear-gradient(135deg, #0A2540 0%, #1a4a8a 60%, #2563c4 100%)",
+    "Mastercard Gold":"linear-gradient(135deg, #1a0a00 0%, #7c3f00 50%, #c97b1a 100%)",
+    "Revolut":        "linear-gradient(135deg, #0f0f1a 0%, #1e1e3f 50%, #635BFF 100%)",
+    "PayPal":         "linear-gradient(135deg, #001435 0%, #003087 50%, #0070ba 100%)",
+    "Trade Republic": "linear-gradient(135deg, #0a0a0a 0%, #0d2918 50%, #16a34a 100%)",
 }
 CARD_LAST4 = {
     "Visa Classic":"1234", "Mastercard Gold":"5678",
@@ -184,8 +329,8 @@ CAT_ICONS = {
     "Kids":"🧒",            "Misc":"💳",
 }
 PALETTE = [
-    "#007aff","#34c759","#ff9500","#ff3b30","#af52de",
-    "#5ac8fa","#ffcc00","#ff2d55","#4cd964","#5856d6",
+    "#635BFF","#00C853","#FF9500","#F4364C","#00D4FF",
+    "#0A2540","#FFB800","#FF6B6B","#4ADE80","#818CF8",
 ]
 QUICK_PROMPTS = [
     "How much did I spend in total?",
