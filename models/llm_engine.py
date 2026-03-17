@@ -199,20 +199,29 @@ Be concise but insightful. Highlight trends and anomalies when relevant."""
         while iterations < self.MAX_TOOL_ITERATIONS:
             iterations += 1
 
-            response = self.client.chat(
-                model="command-r-08-2024",
-                messages=messages,
-                tools=TOOL_DEFINITIONS,
-                temperature=0.3,
-            )
+            try:
+                response = self.client.chat(
+                    model="command-r-08-2024",
+                    messages=messages,
+                    tools=TOOL_DEFINITIONS,
+                    temperature=0.3,
+                )
+            except Exception as e:
+                err = f"API call failed: {type(e).__name__}: {e}"
+                tool_calls_made.append(("ERROR", {}, err))
+                return err, chat_history, tool_calls_made, "tool_use"
 
-            if response.finish_reason == "COMPLETE":
-                final_answer = _extract_text(response.message.content)
+            fr = response.finish_reason
+            tool_calls_made.append(("_debug_finish_reason", {"iteration": iterations}, str(fr)))
+
+            if fr == "COMPLETE":
+                content = response.message.content
+                final_answer = _extract_text(content) if content else ""
                 chat_history.append({"role": "user",     "content": user_message})
                 chat_history.append({"role": "assistant", "content": final_answer})
                 return final_answer, chat_history, tool_calls_made, "tool_use"
 
-            elif response.finish_reason == "TOOL_CALL":
+            elif fr == "TOOL_CALL":
                 # Append the full assistant message (contains tool_calls, content may be None)
                 messages.append(response.message)
 
@@ -233,6 +242,7 @@ Be concise but insightful. Highlight trends and anomalies when relevant."""
                 # Loop again to get the final answer
 
             else:
+                tool_calls_made.append(("_debug_unexpected_reason", {"value": fr}, "broke out of loop"))
                 break
 
         return (
