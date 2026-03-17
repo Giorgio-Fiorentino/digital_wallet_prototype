@@ -213,14 +213,14 @@ Be concise but insightful. Highlight trends and anomalies when relevant."""
                 return final_answer, chat_history, tool_calls_made, "tool_use"
 
             elif response.finish_reason == "TOOL_CALL":
-                # Append the assistant's tool-call message
-                messages.append({"role": "assistant", "content": response.message.content})
+                # Append the full assistant message (contains tool_calls, content may be None)
+                messages.append(response.message)
 
                 # Execute each tool and append results
                 for tool_call in response.message.tool_calls:
                     tool_name = tool_call.function.name
                     try:
-                        tool_args = json.loads(tool_call.function.arguments)
+                        tool_args = json.loads(tool_call.function.arguments or "{}")
                     except (json.JSONDecodeError, TypeError):
                         tool_args = {}
                     result = dispatch_tool(tool_name, tool_args, self.engine)
