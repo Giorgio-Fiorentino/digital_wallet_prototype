@@ -58,9 +58,10 @@ class TFIDFCategorizer:
         tfidf_matrix = self.vectorizer.fit_transform(all_texts)
         similarity   = cosine_similarity(tfidf_matrix[-1], tfidf_matrix[:-1])
         max_sim      = float(similarity.max())
+        best_cat     = known_cats[similarity.argmax()]
         if max_sim > TFIDF_THRESHOLD:
-            return known_cats[similarity.argmax()], max_sim, False
-        return "Misc", max_sim, True
+            return best_cat, max_sim, False
+        return best_cat, max_sim, True
 
     def train(self, description: str, category: str) -> None:
         self.knowledge_base[description.lower()] = category
@@ -96,9 +97,10 @@ class EmbeddingCategorizer:
         similarities = cosine_similarity(query_vec, self._kb_embeddings)[0]
         max_idx      = int(similarities.argmax())
         max_sim      = float(similarities[max_idx])
+        best_cat     = self._kb_categories[max_idx]
         if max_sim > EMBEDDING_THRESHOLD:
-            return self._kb_categories[max_idx], max_sim, False
-        return "Misc", max_sim, True
+            return best_cat, max_sim, False
+        return best_cat, max_sim, True
 
     def train(self, description: str, category: str) -> None:
         self.knowledge_base[description.lower()] = category

@@ -49,6 +49,12 @@ st.markdown("""
     background: #2c2c2e; border: 1px solid #3a3a3c; color: #f5f5f7 !important;
     border-radius: 10px;
 }
+[data-testid="stSidebar"] input[type="text"],
+[data-testid="stSidebar"] input[type="date"],
+[data-testid="stSidebar"] [data-testid="stDateInput"] input {
+    color: #1c1c1e !important;
+    background: #ffffff !important;
+}
 
 /* ── Credit-card component ── */
 .cc-card {
@@ -326,10 +332,18 @@ with st.sidebar:
     )
 
     st.markdown("#### Date Range")
-    today = date.today()
+    if data_ok:
+        _df = engine.df
+        _min_date = _df["Date"].min().date()
+        _max_date = _df["Date"].max().date()
+    else:
+        _min_date = date(2019, 1, 1)
+        _max_date = date.today()
     dr = st.date_input(
         "Period",
-        value=[today.replace(day=1), today],
+        value=[_min_date, _max_date],
+        min_value=_min_date,
+        max_value=_max_date,
         format="YYYY/MM/DD",
         label_visibility="collapsed",
     )

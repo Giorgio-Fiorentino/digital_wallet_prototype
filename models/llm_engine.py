@@ -206,13 +206,13 @@ Be concise but insightful. Highlight trends and anomalies when relevant."""
                 temperature=0.3,
             )
 
-            if response.finish_reason == "STOP":
+            if response.finish_reason == "COMPLETE":
                 final_answer = _extract_text(response.message.content)
                 chat_history.append({"role": "user",     "content": user_message})
                 chat_history.append({"role": "assistant", "content": final_answer})
                 return final_answer, chat_history, tool_calls_made, "tool_use"
 
-            elif response.finish_reason == "TOOL_USE":
+            elif response.finish_reason == "TOOL_CALL":
                 # Append the assistant's tool-call message
                 messages.append({"role": "assistant", "content": response.message.content})
 
