@@ -38,103 +38,126 @@ st.set_page_config(
 # ══════════════════════════════════════════════════════════════════════
 st.markdown("""
 <style>
-/* ── Credit card ── */
-.cc-card {
-    border-radius: 20px; padding: 24px 26px 20px; color: white;
-    min-height: 178px; position: relative;
-    box-shadow: 0 16px 48px rgba(10,37,64,.28), 0 4px 12px rgba(0,0,0,.10);
-    overflow: hidden; margin-bottom: 16px;
+/* ── Page ── */
+[data-testid="stAppViewContainer"] { background: #f2f2f7; }
+[data-testid="stSidebar"]          { background: #1c1c1e !important; }
+[data-testid="stSidebar"] *        { color: #f5f5f7 !important; }
+[data-testid="stSidebar"] label,
+[data-testid="stSidebar"] p        { color: #98989d !important; }
+[data-testid="stSidebar"] .stButton > button {
+    background: #2c2c2e; border: 1px solid #3a3a3c; color: #f5f5f7 !important;
+    border-radius: 10px;
 }
-.cc-card::before {
-    content: ''; position: absolute; top: -70px; right: -70px;
-    width: 220px; height: 220px; border-radius: 50%;
-    background: rgba(255,255,255,.06); pointer-events: none;
+[data-testid="stSidebar"] input[type="text"],
+[data-testid="stSidebar"] input[type="date"],
+[data-testid="stSidebar"] [data-testid="stDateInput"] input {
+    color: #1c1c1e !important;
+    background: #ffffff !important;
+}
+
+/* ── Credit-card component ── */
+.cc-card {
+    border-radius: 20px;
+    padding: 22px 24px 18px;
+    color: white;
+    min-height: 170px;
+    position: relative;
+    font-family: -apple-system, "SF Pro Display", BlinkMacSystemFont, sans-serif;
+    box-shadow: 0 14px 42px rgba(0,0,0,.26);
+    overflow: hidden;
+    margin-bottom: 14px;
 }
 .cc-card::after {
-    content: ''; position: absolute; bottom: -50px; left: -20px;
-    width: 160px; height: 160px; border-radius: 50%;
-    background: rgba(255,255,255,.04); pointer-events: none;
+    content: '';
+    position: absolute;
+    top: -55px; right: -55px;
+    width: 210px; height: 210px;
+    border-radius: 50%;
+    background: rgba(255,255,255,.09);
 }
-.cc-chip {
-    width: 38px; height: 28px;
-    background: linear-gradient(135deg,rgba(255,255,255,.5),rgba(255,255,255,.2));
-    border-radius: 5px; margin-bottom: 22px; border: 1px solid rgba(255,255,255,.25);
-}
-.cc-num  { font-size: 15px; letter-spacing: 4px; font-weight: 500; opacity: .9; }
-.cc-name { font-size: 11px; opacity: .5; margin-top: 8px; letter-spacing: 2px;
-           text-transform: uppercase; font-weight: 600; }
-.cc-spend { position: absolute; top: 22px; right: 24px; text-align: right; }
-.cc-sl   { font-size: 10px; opacity: .55; text-transform: uppercase;
-           letter-spacing: 1px; font-weight: 600; }
-.cc-sv   { font-size: 23px; font-weight: 700; }
+.cc-chip  { width: 36px; height: 26px; background: rgba(255,255,255,.32);
+            border-radius: 5px; margin-bottom: 20px; }
+.cc-num   { font-size: 15px; letter-spacing: 3px; font-weight: 600; opacity: .88; }
+.cc-name  { font-size: 11px; opacity: .62; margin-top: 6px;
+            letter-spacing: 1.2px; text-transform: uppercase; }
+.cc-spend { position: absolute; top: 20px; right: 22px; text-align: right; }
+.cc-sl    { font-size: 10px; opacity: .58; text-transform: uppercase; letter-spacing: .5px; }
+.cc-sv    { font-size: 21px; font-weight: 700; }
 
 /* ── KPI tile ── */
 .kpi {
-    background: white; border-radius: 14px; padding: 20px 22px;
-    box-shadow: 0 1px 3px rgba(0,0,0,.04), 0 4px 12px rgba(0,0,0,.05);
-    border: 1px solid #e8ecf0; border-left: 3px solid #635BFF; margin-bottom: 14px;
+    background: white; border-radius: 16px;
+    padding: 16px 20px; box-shadow: 0 2px 10px rgba(0,0,0,.06);
+    margin-bottom: 12px;
 }
-.kpi-lbl { font-size: 11px; color: #6b7c93; font-weight: 600;
-           text-transform: uppercase; letter-spacing: .7px; }
-.kpi-val { font-size: 30px; font-weight: 800; color: #0A2540;
-           letter-spacing: -1.5px; margin: 6px 0 3px; }
+.kpi-lbl { font-size: 11px; color: #6e6e73; font-weight: 500;
+           text-transform: uppercase; letter-spacing: .5px; }
+.kpi-val { font-size: 28px; font-weight: 700; color: #1c1c1e;
+           letter-spacing: -1px; margin: 4px 0 2px; }
 .kpi-dlt { font-size: 12px; font-weight: 600; }
-.green { color: #16a34a; } .red { color: #dc2626; } .blue { color: #635BFF; }
+.green   { color: #34c759; }
+.red     { color: #ff3b30; }
+.blue    { color: #007aff; }
 
 /* ── Transaction row ── */
 .txn {
-    display: flex; align-items: center; gap: 13px;
-    padding: 12px 4px; border-bottom: 1px solid #f0f4f8;
+    display: flex; align-items: center; gap: 12px;
+    padding: 11px 0; border-bottom: 1px solid #f2f2f7;
 }
 .txn:last-child { border-bottom: none; }
 .txn-ico {
-    width: 40px; height: 40px; border-radius: 12px; background: #f0eeff;
-    display: flex; align-items: center; justify-content: center;
-    font-size: 17px; flex-shrink: 0;
+    width: 38px; height: 38px; border-radius: 50%;
+    background: #f2f2f7; display: flex; align-items: center;
+    justify-content: center; font-size: 16px; flex-shrink: 0;
 }
-.txn-nm  { font-weight: 600; font-size: 14px; color: #0A2540; }
-.txn-sub { font-size: 12px; color: #8898aa; margin-top: 2px; }
-.txn-amt { margin-left: auto; font-weight: 700; font-size: 15px; color: #0A2540; white-space: nowrap; }
+.txn-nm  { font-weight: 600; font-size: 14px; color: #1c1c1e; }
+.txn-sub { font-size: 11px; color: #8e8e93; margin-top: 1px; }
+.txn-amt { margin-left: auto; font-weight: 700; font-size: 15px;
+           color: #1c1c1e; white-space: nowrap; }
 
-/* ── Panel ── */
+/* ── Panel (white rounded card) ── */
 .panel {
-    background: white; border-radius: 14px; padding: 20px 24px;
-    box-shadow: 0 1px 3px rgba(0,0,0,.04), 0 4px 12px rgba(0,0,0,.05);
-    border: 1px solid #e8ecf0; margin-bottom: 16px;
+    background: white; border-radius: 16px;
+    padding: 16px 20px; box-shadow: 0 2px 8px rgba(0,0,0,.05);
+    margin-bottom: 14px;
 }
 
 /* ── Boarding pass ── */
-.bp { background: white; border-radius: 16px; overflow: hidden;
-      box-shadow: 0 4px 20px rgba(0,0,0,.09); margin-bottom: 18px;
-      border: 1px solid #e8ecf0; }
-.bp-hdr { background: linear-gradient(135deg,#0A2540,#1e4a80); color: white; padding: 16px 24px; }
-.bp-body { padding: 16px 24px; display: flex; gap: 28px; flex-wrap: wrap; }
-.bp-fl  { font-size: 10px; color: #8898aa; text-transform: uppercase; letter-spacing: .8px; font-weight: 600; }
-.bp-fv  { font-size: 20px; font-weight: 700; color: #0A2540; }
-.bp-qr  { padding: 14px 24px; border-top: 2px dashed #e8ecf0; display: flex; align-items: center; gap: 14px; }
+.bp  { background: white; border-radius: 18px; overflow: hidden;
+       box-shadow: 0 4px 20px rgba(0,0,0,.09); margin-bottom: 16px; }
+.bp-hdr { background: #1a73e8; color: white; padding: 15px 22px; }
+.bp-body { padding: 16px 22px; display: flex; gap: 28px; flex-wrap: wrap; }
+.bp-fl  { font-size: 10px; color: #8e8e93; text-transform: uppercase; letter-spacing: .5px; }
+.bp-fv  { font-size: 20px; font-weight: 700; color: #1c1c1e; }
+.bp-qr  { padding: 14px 22px; border-top: 2px dashed #e5e5ea;
+          display: flex; align-items: center; gap: 14px; }
 
 /* ── Chat bubbles ── */
-.msg-wrap-u { display: flex; justify-content: flex-end; margin: 6px 0; }
-.msg-wrap-b { display: flex; justify-content: flex-start; margin: 6px 0; }
+.msg-wrap-u { display: flex; justify-content: flex-end; margin: 5px 0; }
+.msg-wrap-b { display: flex; justify-content: flex-start; margin: 5px 0; }
 .msg-u {
-    background: #635BFF; color: white; border-radius: 18px 18px 4px 18px;
-    padding: 11px 16px; max-width: 72%; font-size: 14px; line-height: 1.55;
-    box-shadow: 0 4px 14px rgba(99,91,255,.3);
+    background: #007aff; color: white;
+    border-radius: 18px 18px 4px 18px;
+    padding: 10px 14px; max-width: 72%; font-size: 14px; line-height: 1.5;
 }
 .msg-b {
-    background: white; color: #0A2540; border-radius: 18px 18px 18px 4px;
-    padding: 11px 16px; max-width: 80%; font-size: 14px; line-height: 1.55;
-    box-shadow: 0 2px 10px rgba(0,0,0,.07); border: 1px solid #e8ecf0;
+    background: white; color: #1c1c1e;
+    border-radius: 18px 18px 18px 4px;
+    padding: 10px 14px; max-width: 80%; font-size: 14px; line-height: 1.5;
+    box-shadow: 0 2px 8px rgba(0,0,0,.07);
 }
-.msg-tag { font-size: 10px; color: #8898aa; margin-top: 4px; padding-left: 4px; font-weight: 600; }
+.msg-tag { font-size: 10px; color: #8e8e93; margin-top: 3px; padding-left: 4px; }
 
 /* ── Anomaly alert ── */
 .anom {
-    background: #fff8f8; border-left: 3px solid #dc2626;
-    border-radius: 0 10px 10px 0; padding: 12px 16px; margin: 6px 0;
+    background: #fff5f5; border-left: 4px solid #ff3b30;
+    border-radius: 10px; padding: 10px 14px; margin: 5px 0;
 }
-.anom-d { font-weight: 700; font-size: 14px; color: #0A2540; }
-.anom-m { font-size: 11px; color: #8898aa; margin-top: 3px; }
+.anom-d { font-weight: 600; font-size: 14px; color: #1c1c1e; }
+.anom-m { font-size: 11px; color: #8e8e93; margin-top: 3px; }
+
+/* ── Tab styling ── */
+[data-testid="stTab"] > button { font-weight: 600; font-size: 14px; }
 </style>
 """, unsafe_allow_html=True)
 
@@ -143,11 +166,11 @@ st.markdown("""
 # CONSTANTS
 # ══════════════════════════════════════════════════════════════════════
 CARD_GRADIENTS = {
-    "Visa Classic":   "linear-gradient(135deg, #0A2540 0%, #1a4a8a 60%, #2563c4 100%)",
-    "Mastercard Gold":"linear-gradient(135deg, #1a0a00 0%, #7c3f00 50%, #c97b1a 100%)",
-    "Revolut":        "linear-gradient(135deg, #0f0f1a 0%, #1e1e3f 50%, #635BFF 100%)",
-    "PayPal":         "linear-gradient(135deg, #001435 0%, #003087 50%, #0070ba 100%)",
-    "Trade Republic": "linear-gradient(135deg, #0a0a0a 0%, #0d2918 50%, #16a34a 100%)",
+    "Visa Classic":   "linear-gradient(135deg,#1a1f71 0%,#4a90e2 100%)",
+    "Mastercard Gold":"linear-gradient(135deg,#7b4f12 0%,#d4a017 100%)",
+    "Revolut":        "linear-gradient(135deg,#191c1f 0%,#5a5e65 100%)",
+    "PayPal":         "linear-gradient(135deg,#003087 0%,#009cde 100%)",
+    "Trade Republic": "linear-gradient(135deg,#0a0a0a 0%,#1db954 100%)",
 }
 CARD_LAST4 = {
     "Visa Classic":"1234", "Mastercard Gold":"5678",
@@ -161,8 +184,8 @@ CAT_ICONS = {
     "Kids":"🧒",            "Misc":"💳",
 }
 PALETTE = [
-    "#635BFF","#00C853","#FF9500","#F4364C","#00D4FF",
-    "#0A2540","#FFB800","#FF6B6B","#4ADE80","#818CF8",
+    "#007aff","#34c759","#ff9500","#ff3b30","#af52de",
+    "#5ac8fa","#ffcc00","#ff2d55","#4cd964","#5856d6",
 ]
 QUICK_PROMPTS = [
     "How much did I spend in total?",
