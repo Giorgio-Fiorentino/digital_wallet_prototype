@@ -18,6 +18,15 @@ from dotenv import load_dotenv
 load_dotenv()
 
 
+def _normalize(arr: np.ndarray) -> None:
+    """In-place L2 normalization. Works with any faiss version."""
+    try:
+        faiss.normalize_L2(arr)
+    except AttributeError:
+        norms = np.linalg.norm(arr, axis=1, keepdims=True)
+        arr /= np.maximum(norms, 1e-10)
+
+
 class RAGEngine:
 
     DOCS_DIR      = "docs/card_terms"
@@ -66,7 +75,7 @@ class RAGEngine:
             input_type="search_document",
         )
         embeddings = np.array(response.embeddings, dtype="float32")
-        faiss.normalize_L2(embeddings)
+        _normalize(embeddings)
 
         dim        = embeddings.shape[1]
         self.index = faiss.IndexFlatIP(dim)
@@ -83,7 +92,7 @@ class RAGEngine:
             input_type="search_query",
         )
         query_vec = np.array(response.embeddings, dtype="float32")
-        faiss.normalize_L2(query_vec)
+        _normalize(query_vec)
         scores, indices = self.index.search(query_vec, self.TOP_K)
         results = []
         for score, idx in zip(scores[0], indices[0]):
@@ -127,7 +136,7 @@ Answer:"""
         keywords = [
             "annual fee", "cashback", "reward", "interest", "apr",
             "foreign transaction", "travel insurance", "lounge", "benefit",
-            "limit", "withdrawal", "fee", "charge", "terms", "condition",
+            "limit", "withdrawal", "fee", "finance charge", "terms", "condition",
             "coverage", "protection", "minimum payment", "late fee",
             "credit limit", "points", "miles", "membership", "plan",
         ]

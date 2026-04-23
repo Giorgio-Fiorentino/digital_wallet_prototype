@@ -180,25 +180,40 @@ class WalletEngine:
         df = self.df.copy()
         if month:
             df = df[df["Month"].str.lower() == month.lower()]
+        has_source_type = "Source_Type" in df.columns
+        groupby_cols = ["Card", "Source_Type"] if has_source_type else ["Card"]
         breakdown   = (
-            df.groupby(["Card", "Source_Type"])["Amount"]
+            df.groupby(groupby_cols)["Amount"]
             .agg(["sum", "count"]).reset_index()
             .sort_values("sum", ascending=False)
         )
         grand_total = breakdown["sum"].sum()
         lines = ["Spending by payment source:\n"]
-        lines.append(
-            f"  {'Source':<20} {'Type':<20} {'Total':>10}  {'Txns':>6}  {'Share':>7}"
-        )
-        lines.append("  " + "─" * 65)
-        for _, row in breakdown.iterrows():
-            pct = (row["sum"] / grand_total * 100) if grand_total > 0 else 0
+        if has_source_type:
             lines.append(
-                f"  {row['Card']:<20} {row['Source_Type']:<20} "
-                f"${row['sum']:>8,.2f}  {int(row['count']):>6}  {pct:>6.1f}%"
+                f"  {'Source':<20} {'Type':<20} {'Total':>10}  {'Txns':>6}  {'Share':>7}"
             )
-        lines.append("  " + "─" * 65)
-        lines.append(f"  {'TOTAL':<20} {'':<20} ${grand_total:>8,.2f}")
+            lines.append("  " + "─" * 65)
+            for _, row in breakdown.iterrows():
+                pct = (row["sum"] / grand_total * 100) if grand_total > 0 else 0
+                lines.append(
+                    f"  {row['Card']:<20} {row['Source_Type']:<20} "
+                    f"${row['sum']:>8,.2f}  {int(row['count']):>6}  {pct:>6.1f}%"
+                )
+        else:
+            lines.append(
+                f"  {'Source':<20} {'Total':>10}  {'Txns':>6}  {'Share':>7}"
+            )
+            lines.append("  " + "─" * 45)
+            for _, row in breakdown.iterrows():
+                pct = (row["sum"] / grand_total * 100) if grand_total > 0 else 0
+                lines.append(
+                    f"  {row['Card']:<20} "
+                    f"${row['sum']:>8,.2f}  {int(row['count']):>6}  {pct:>6.1f}%"
+                )
+        lines.append("  " + "─" * (65 if has_source_type else 45))
+        lines.append(f"  {'TOTAL':<20} {'':<20} ${grand_total:>8,.2f}" if has_source_type
+                     else f"  {'TOTAL':<20} ${grand_total:>8,.2f}")
         return "\n".join(lines)
 
     def detect_anomalies(
@@ -240,6 +255,80 @@ class WalletEngine:
                 f"Anomaly score: {a['z_score']:.1f}σ\n"
             )
         return "\n".join(lines)
+
+    def get_budget_status(self, goals: dict) -> dict:
+        """
+        For each category with a positive limit in goals, compute current
+        calendar-month spend and return status dict.
+        """
+        now = datetime.now()
+        df  = self.df.copy()
+        df  = df[(df["Year"] == now.year) & (df["Month_Num"] == now.month)]
+
+        result = {}
+        for category, limit in goals.items():
+            limit = float(limit)
+            if limit <= 0:
+                continue
+            spent = float(df[df["Category"] == category]["Amount"].sum())
+            pct   = spent / limit
+            if pct < 0.70:
+                status = "ok"
+            elif pct < 1.0:
+                status = "warning"
+            else:
+                status = "over"
+            result[category] = {
+                "limit":  limit,
+                "spent":  round(spent, 2),
+                "pct":    round(pct, 4),
+                "status": status,
+            }
+        return result
+
+    def inject_dataframe(self, df: Optional[pd.DataFrame]) -> None:
+        """
+        Override the loaded DataFrame with an externally provided one.
+        Pass None to reset — next access will reload from CSV.
+        """
+        self._df = df
+
+    def get_health_inputs(self) -> dict:
+        df = self.df.copy()
+
+        # fraud_rate — fraction of Is_Fraud == True
+        fraud_rate = float(df["Is_Fraud"].mean()) if "Is_Fraud" in df.columns else 0.0
+
+        # anomaly_count — transactions with z-score > 2σ within their category
+        anomaly_count = 0
+        for category, group in df.groupby("Category"):
+            if len(group) < 3:
+                continue
+            mean = group["Amount"].mean()
+            std  = group["Amount"].std()
+            if std == 0:
+                continue
+            anomaly_count += int((np.abs((group["Amount"] - mean) / std) > 2.0).sum())
+
+        # category_diversity — number of distinct categories used
+        category_diversity = int(df["Category"].nunique())
+
+        # monthly_variance — std dev of per-month totals
+        monthly_totals = df.groupby(["Year", "Month_Num"])["Amount"].sum()
+        monthly_variance = float(monthly_totals.std()) if len(monthly_totals) > 1 else 0.0
+
+        # top_category_share — fraction of total spend in the single top category
+        cat_totals = df.groupby("Category")["Amount"].sum()
+        total = cat_totals.sum()
+        top_category_share = float(cat_totals.max() / total) if total > 0 else 0.0
+
+        return {
+            "fraud_rate":         round(fraud_rate, 4),
+            "anomaly_count":      anomaly_count,
+            "category_diversity": category_diversity,
+            "monthly_variance":   round(monthly_variance, 2),
+            "top_category_share": round(top_category_share, 4),
+        }
 
     def get_data_context(self) -> dict:
         df = self.df

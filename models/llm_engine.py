@@ -117,6 +117,34 @@ TOOL_DEFINITIONS = [
 ]
 
 
+HEALTH_SCORE_SYSTEM_PROMPT = (
+    "You are a financial health AI. Given spending signals, return ONLY valid JSON "
+    "with exactly these keys:\n"
+    '{"grade": "A+" | "A" | "B+" | "B" | "C" | "D", '
+    '"score": <integer 0-100>, '
+    '"summary": "<one sentence headline>", '
+    '"breakdown": {'
+    '"fraud_rate": "<short explanation>", '
+    '"anomaly_count": "<short explanation>", '
+    '"category_diversity": "<short explanation>", '
+    '"monthly_variance": "<short explanation>", '
+    '"top_category_share": "<short explanation>"}}\n'
+    "Return nothing but the JSON object. No markdown, no code fences."
+)
+
+STRATEGY_SYSTEM_PROMPT = (
+    "You are a financial strategy AI. Given a topic about a user's spending, "
+    "return ONLY valid JSON with exactly these six keys:\n"
+    '{"urgency": "low" | "medium" | "high", '
+    '"root_cause": "<one sentence diagnosis>", '
+    '"narrative": "<2-3 sentences of practical, direct advice written to the user — concrete, specific, and actionable. Mention realistic targets or behaviours the user should adopt>", '
+    '"actions": ["<step 1>", "<step 2>", "<step 3>"], '
+    '"talking_points": ["<phrase 1>", "<phrase 2>"], '
+    '"risk_warning": "<one sentence risk note>"}\n'
+    "Return nothing but the JSON object. No markdown, no code fences."
+)
+
+
 def dispatch_tool(tool_name: str, tool_args: dict, engine: WalletEngine) -> str:
     tool_map = {
         "get_transactions":       engine.get_transactions,
@@ -145,6 +173,21 @@ def _extract_text(content) -> str:
     return "".join(text_parts)
 
 
+def _compute_confidence(iterations: int, tool_calls_made: list) -> str:
+    """
+    Heuristic confidence from agentic loop behaviour.
+    Debug entries (names starting with '_') are excluded from the real-call count.
+    """
+    real_calls = [t for t in tool_calls_made if not t[0].startswith("_")]
+    if not real_calls:
+        return "low"
+    if iterations == 1 and len(real_calls) == 1:
+        return "high"
+    if iterations <= 2:
+        return "medium"
+    return "low"
+
+
 class WalletLLM:
 
     MAX_TOOL_ITERATIONS = 5
@@ -169,6 +212,107 @@ Always use tools to retrieve real data before answering financial questions.
 Format currency as $ with 2 decimal places.
 Be concise but insightful. Highlight trends and anomalies when relevant."""
 
+    def compute_health_score(self) -> dict:
+        """
+        Returns a health score dict with keys: grade, score, summary, breakdown.
+        Returns {"error": "unavailable"} on any failure.
+        """
+        inputs = self.engine.get_health_inputs()
+        user_prompt = (
+            f"Financial signals:\n"
+            f"- Fraud rate: {inputs['fraud_rate']:.2%}\n"
+            f"- Anomaly count: {inputs['anomaly_count']}\n"
+            f"- Category diversity: {inputs['category_diversity']} categories\n"
+            f"- Monthly spend std dev: ${inputs['monthly_variance']:,.2f}\n"
+            f"- Top category share: {inputs['top_category_share']:.1%}\n\n"
+            "Compute the financial health grade and score."
+        )
+        try:
+            response = self.client.chat(
+                model="command-r-08-2024",
+                messages=[
+                    {"role": "system", "content": HEALTH_SCORE_SYSTEM_PROMPT},
+                    {"role": "user",   "content": user_prompt},
+                ],
+                temperature=0.1,
+            )
+            raw = _extract_text(response.message.content).strip()
+            if raw.startswith("```"):
+                raw = raw.split("```")[1]
+                if raw.startswith("json"):
+                    raw = raw[4:]
+            data = json.loads(raw.strip())
+        except Exception:
+            return {"error": "unavailable"}
+
+        required = {"grade", "score", "summary", "breakdown"}
+        if not required.issubset(data.keys()):
+            return {"error": "unavailable"}
+        valid_grades = {"A+", "A", "B+", "B", "C", "D"}
+        if data.get("grade") not in valid_grades:
+            return {"error": "unavailable"}
+        return data
+
+    def generate_strategy(self, topic: str) -> dict:
+        """
+        Returns structured strategy dict with keys:
+          urgency, root_cause, actions, talking_points, risk_warning.
+        Returns {"error": "<reason>"} on failure.
+        """
+        ctx    = self.engine.get_data_context()
+        health = self.engine.get_health_inputs()
+        user_prompt = (
+            f"Topic: {topic}\n\n"
+            f"User financial context:\n"
+            f"- Total transactions: {ctx['total_transactions']}\n"
+            f"- Date range: {ctx['date_from']} to {ctx['date_to']}\n"
+            f"- Payment sources: {', '.join(ctx['sources'])}\n"
+            f"- Categories: {', '.join(ctx['categories'])}\n"
+            f"- Fraud rate: {health['fraud_rate']:.1%}\n"
+            f"- Anomaly count: {health['anomaly_count']}\n"
+            f"- Monthly spend std dev: ${health['monthly_variance']:,.2f}\n"
+            f"- Top category share: {health['top_category_share']:.1%}"
+        )
+        try:
+            response = self.client.chat(
+                model="command-r-08-2024",
+                messages=[
+                    {"role": "system", "content": STRATEGY_SYSTEM_PROMPT},
+                    {"role": "user",   "content": user_prompt},
+                ],
+                temperature=0.1,
+            )
+            raw = _extract_text(response.message.content).strip()
+            if raw.startswith("```"):
+                raw = raw.split("```")[1]
+                if raw.startswith("json"):
+                    raw = raw[4:]
+            data = json.loads(raw.strip())
+        except Exception as e:
+            msg = str(e)
+            # Truncate verbose API error objects to just the key message
+            if "message" in msg and len(msg) > 120:
+                try:
+                    import re
+                    match = re.search(r"'message':\s*'([^']+)'", msg)
+                    msg = match.group(1) if match else msg[:120]
+                except Exception:
+                    msg = msg[:120]
+            return {"error": msg}
+
+        required = {"urgency", "root_cause", "actions", "talking_points", "risk_warning"}
+        if not required.issubset(data.keys()):
+            return {"error": "Incomplete strategy response — missing required fields"}
+        if data["urgency"] not in ("low", "medium", "high"):
+            data["urgency"] = "medium"
+        if not isinstance(data["actions"], list) or not data["actions"]:
+            return {"error": "Invalid actions field"}
+        if not isinstance(data["talking_points"], list) or not data["talking_points"]:
+            return {"error": "Invalid talking_points field"}
+        if not data.get("root_cause") or not data.get("risk_warning"):
+            return {"error": "Missing root_cause or risk_warning"}
+        return data
+
     def chat(
         self,
         user_message: str,
@@ -186,15 +330,16 @@ Be concise but insightful. Highlight trends and anomalies when relevant."""
                            f"Retrieved from: {sources}")]
             chat_history.append({"role": "user",      "content": user_message})
             chat_history.append({"role": "assistant",  "content": answer})
-            return answer, chat_history, tool_calls, "rag"
+            return answer, chat_history, tool_calls, "rag", "high"
 
         # Build messages: system + history + current user turn
         messages = [{"role": "system", "content": self.system_prompt}]
         messages.extend(chat_history)
         messages.append({"role": "user", "content": user_message})
 
-        tool_calls_made = []
-        iterations      = 0
+        tool_calls_made  = []
+        iterations       = 0
+        tool_iterations  = 0   # counts only TOOL_CALL rounds, not the final synthesis
 
         while iterations < self.MAX_TOOL_ITERATIONS:
             iterations += 1
@@ -219,9 +364,11 @@ Be concise but insightful. Highlight trends and anomalies when relevant."""
                 final_answer = _extract_text(content) if content else ""
                 chat_history.append({"role": "user",     "content": user_message})
                 chat_history.append({"role": "assistant", "content": final_answer})
-                return final_answer, chat_history, tool_calls_made, "tool_use"
+                confidence = _compute_confidence(tool_iterations, tool_calls_made)
+                return final_answer, chat_history, tool_calls_made, "tool_use", confidence
 
             elif fr == "TOOL_CALL":
+                tool_iterations += 1
                 # Append the full assistant message (contains tool_calls, content may be None)
                 messages.append(response.message)
 
@@ -250,4 +397,5 @@ Be concise but insightful. Highlight trends and anomalies when relevant."""
             chat_history,
             tool_calls_made,
             "tool_use",
+            "low",
         )

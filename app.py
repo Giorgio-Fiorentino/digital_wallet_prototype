@@ -14,12 +14,13 @@ import pandas as pd
 import numpy as np
 import plotly.express as px
 import os
-from datetime import date
+from datetime import date, datetime
 from dotenv import load_dotenv
 
-from models.wallet_engine import WalletEngine
-from models.categorizer   import TFIDFCategorizer, EmbeddingCategorizer
-from models.evaluator     import evaluate_categorizer, get_metrics_dataframe
+from models.wallet_engine  import WalletEngine
+from models.categorizer    import TFIDFCategorizer, EmbeddingCategorizer
+from models.evaluator      import evaluate_categorizer, get_metrics_dataframe
+from models.bank_connector import TrueLayerAdapter
 
 load_dotenv()
 
@@ -178,10 +179,12 @@ CARD_LAST4 = {
     "Trade Republic":"7890",
 }
 CAT_ICONS = {
-    "Food & Dining":"🍽️",  "Grocery":"🛒",        "Shopping":"🛍️",
-    "Gas & Transport":"⛽", "Travel":"✈️",          "Entertainment":"🎬",
-    "Health & Fitness":"💊","Home":"🏠",            "Personal Care":"💄",
-    "Kids":"🧒",            "Misc":"💳",
+    "Food & Dining":"🍽️",      "Grocery":"🛒",         "Groceries":"🛒",
+    "Shopping":"🛍️",           "Gas & Transport":"⛽",  "Transport":"🚗",
+    "Travel":"✈️",              "Entertainment":"🎬",    "Health & Fitness":"💊",
+    "Home":"🏠",                "Utilities":"💡",        "Personal Care":"💄",
+    "Finance & Investment":"📈","Transfer":"💸",         "Kids":"🧒",
+    "Misc":"💳",
 }
 PALETTE = [
     "#007aff","#34c759","#ff9500","#ff3b30","#af52de",
@@ -192,8 +195,8 @@ QUICK_PROMPTS = [
     "What are my top 5 merchants?",
     "Show spending by category",
     "Any suspicious charges?",
-    "What are Revolut's foreign transaction fees?",
-    "Compare spending across all my cards",
+    "What are the foreign transaction fees?",
+    "Compare spending across all my payment sources",
 ]
 
 
@@ -224,14 +227,33 @@ def load_ai():
         return None, None
 
 
+@st.cache_resource(show_spinner=False)
+def load_csv_df() -> pd.DataFrame:
+    """Revolut + Visa Classic rows from CSV — always available regardless of live injection."""
+    e = WalletEngine()
+    df = e.load_data().copy()
+    return df[df["Card"].isin(["Revolut", "Visa Classic"])]
+
+
 # ══════════════════════════════════════════════════════════════════════
 # HTML HELPERS
 # ══════════════════════════════════════════════════════════════════════
-def cc_html(source: str, spend: float) -> str:
-    grad = CARD_GRADIENTS.get(source, "linear-gradient(135deg,#555,#888)")
-    l4   = CARD_LAST4.get(source, "••••")
+def cc_html(source: str, spend: float, is_live: bool = False) -> str:
+    grad = CARD_GRADIENTS.get(source)
+    if grad is None:
+        hue  = abs(hash(source)) % 360
+        hue2 = (hue + 45) % 360
+        grad = f"linear-gradient(135deg,hsl({hue},55%,28%),hsl({hue2},65%,48%))"
+    l4         = CARD_LAST4.get(source, "••••")
+    live_badge = (
+        '<span style="position:absolute;top:12px;left:16px;background:rgba(255,59,48,.85);'
+        'color:white;font-size:9px;font-weight:700;letter-spacing:.5px;padding:2px 7px;'
+        'border-radius:20px;text-transform:uppercase">🔴 Live</span>'
+        if is_live else ""
+    )
     return f"""
 <div class="cc-card" style="background:{grad}">
+  {live_badge}
   <div class="cc-chip"></div>
   <div class="cc-spend">
     <div class="cc-sl">Period Spend</div>
@@ -304,6 +326,21 @@ def apply_filters(engine: WalletEngine, cards: list, dr) -> pd.DataFrame:
 
 
 # ══════════════════════════════════════════════════════════════════════
+# EARLY INJECTION — must run before sidebar so valid_sources is correct
+# ══════════════════════════════════════════════════════════════════════
+_pre_engine = load_engine()
+if st.session_state.get("use_truelayer", True) and "live_df" in st.session_state:
+    _live_pre = st.session_state.get("live_df")
+    if _live_pre is not None:
+        _csv_pre = load_csv_df().copy()
+        _csv_pre["Source_Tag"] = "csv"
+        _live_pre_tagged = _live_pre.copy()
+        _live_pre_tagged["Source_Tag"] = "live"
+        _pre_engine.inject_dataframe(
+            pd.concat([_csv_pre, _live_pre_tagged], ignore_index=True)
+        )
+
+# ══════════════════════════════════════════════════════════════════════
 # SIDEBAR
 # ══════════════════════════════════════════════════════════════════════
 with st.sidebar:
@@ -351,11 +388,73 @@ with st.sidebar:
         st.rerun()
 
     st.divider()
+    st.markdown("#### Data Source")
+    use_live = st.toggle(
+        "Use live data (TrueLayer sandbox)",
+        value=st.session_state.get("use_truelayer", True),
+        key="truelayer_toggle",
+        help="Fetches live transactions from TrueLayer sandbox instead of CSV",
+    )
+    if use_live != st.session_state.get("use_truelayer", True):
+        st.session_state.use_truelayer = use_live
+        st.session_state.pop("live_df", None)
+        st.session_state.pop("live_error", None)
+        st.session_state.pop("health_score", None)
+        st.rerun()
+
+    st.divider()
     if data_ok:
         ctx = engine.get_data_context()
         st.caption(f"📅 {ctx['date_from']} → {ctx['date_to']}")
         st.caption(f"🔢 {ctx['total_transactions']:,} transactions")
         st.caption(f"💰 ${ctx['total_spend']:,.2f} total")
+
+
+# ══════════════════════════════════════════════════════════════════════
+# TRUELAYER LIVE DATA INJECTION
+# ══════════════════════════════════════════════════════════════════════
+if st.session_state.get("use_truelayer", True) and data_ok:
+    if "live_df" not in st.session_state:
+        truelayer_id     = os.getenv("TRUELAYER_CLIENT_ID", "")
+        truelayer_secret = os.getenv("TRUELAYER_CLIENT_SECRET", "")
+        if truelayer_id and truelayer_secret:
+            try:
+                with st.spinner("Fetching & categorising live transactions…"):
+                    adapter = TrueLayerAdapter()
+                    st.session_state.live_df    = adapter.fetch_transactions()
+                    st.session_state.live_error = None
+                    st.session_state.pop("health_score", None)
+                st.rerun()  # re-render sidebar with live sources
+            except RuntimeError as exc:
+                st.session_state.live_error = str(exc)
+                st.session_state.live_df    = None
+        else:
+            st.session_state.live_error = (
+                "TRUELAYER_CLIENT_ID and TRUELAYER_CLIENT_SECRET not set in .env"
+            )
+            st.session_state.live_df = None
+
+    if st.session_state.get("live_error"):
+        st.warning(
+            f"⚠️ TrueLayer unavailable — showing CSV data. "
+            f"({st.session_state.live_error})"
+        )
+        engine.inject_dataframe(None)
+    elif st.session_state.get("live_df") is not None:
+        _csv = load_csv_df().copy()
+        _csv["Source_Tag"] = "csv"
+        _live = st.session_state.live_df.copy()
+        _live["Source_Tag"] = "live"
+        merged = pd.concat([_csv, _live], ignore_index=True)
+        engine.inject_dataframe(merged)
+        n_live = _live["Card"].nunique()
+        n_csv  = _csv["Card"].nunique()
+        st.sidebar.success(f"✓ {n_live} live account · {n_csv} CSV accounts")
+        actual_sources = engine.valid_sources
+        if selected_cards and not any(c in actual_sources for c in selected_cards):
+            selected_cards = actual_sources
+else:
+    engine.inject_dataframe(None)
 
 
 # ══════════════════════════════════════════════════════════════════════
@@ -369,6 +468,9 @@ if not data_ok:
     st.stop()
 
 df = apply_filters(engine, selected_cards, dr)
+
+# Load AI once at module level so all tabs can access llm/rag
+llm, rag = load_ai()
 
 
 # ══════════════════════════════════════════════════════════════════════
@@ -387,6 +489,50 @@ tab_wallet, tab_insights, tab_chat, tab_lab = st.tabs([
 # ──────────────────────────────────────────────────────────────────────
 with tab_wallet:
 
+    # ── Financial Health Score
+    if llm is not None:
+        if "health_score" not in st.session_state:
+            with st.spinner("Computing Financial Health Score…"):
+                st.session_state.health_score = llm.compute_health_score()
+        hs = st.session_state.health_score
+        if "error" not in hs:
+            grade   = hs["grade"]
+            score   = hs.get("score", 0)
+            summary = hs.get("summary", "")
+            grade_colors = {
+                "A+": "#34c759", "A":  "#34c759",
+                "B+": "#ff9500", "B":  "#ff9500",
+                "C":  "#ff3b30", "D":  "#ff3b30",
+            }
+            bg = grade_colors.get(grade, "#8e8e93")
+            breakdown = hs.get("breakdown", {})
+            breakdown_html = "".join(
+                f'<div style="font-size:12px;margin-top:4px">'
+                f'<span style="opacity:.7">{k.replace("_"," ").title()}:</span> {v}'
+                f'</div>'
+                for k, v in breakdown.items()
+            )
+            st.markdown(f"""
+<div style="background:{bg};border-radius:16px;padding:20px 24px;
+     margin-bottom:16px;color:white;display:flex;align-items:center;gap:24px;">
+  <div style="font-size:52px;font-weight:800;letter-spacing:-2px;
+       min-width:80px;text-align:center;line-height:1">{grade}</div>
+  <div style="flex:1">
+    <div style="font-size:11px;text-transform:uppercase;letter-spacing:1px;
+         opacity:.8">Financial Health Score — {score}/100</div>
+    <div style="font-size:16px;font-weight:700;margin-top:4px">{summary}</div>
+    {breakdown_html}
+  </div>
+</div>""", unsafe_allow_html=True)
+        else:
+            st.markdown(
+                '<div class="kpi"><div class="kpi-lbl">Financial Health Score</div>'
+                '<div style="font-size:16px;color:#8e8e93">Score unavailable</div></div>',
+                unsafe_allow_html=True,
+            )
+
+    st.divider()
+
     # ── Card stack
     st.markdown("### Payment Methods")
 
@@ -398,10 +544,16 @@ with tab_wallet:
     if selected_cards:
         n_cols = min(len(selected_cards), 3)
         cols   = st.columns(n_cols)
+        _live_cards = set()
+        if "Source_Tag" in engine.df.columns:
+            _live_cards = set(
+                engine.df[engine.df["Source_Tag"] == "live"]["Card"].unique()
+            )
         for i, card in enumerate(selected_cards):
             with cols[i % n_cols]:
                 st.markdown(
-                    cc_html(card, float(per_card.get(card, 0))),
+                    cc_html(card, float(per_card.get(card, 0)),
+                            is_live=(card in _live_cards)),
                     unsafe_allow_html=True,
                 )
     else:
@@ -637,13 +789,106 @@ with tab_insights:
   </div>
 </div>""", unsafe_allow_html=True)
 
+        st.divider()
+
+        # ── Budget Goals
+        st.markdown("### 🎯 Category Budget Goals")
+        st.caption(
+            "Set monthly spending limits per category. "
+            "Progress updates based on current calendar month."
+        )
+
+        if "budget_goals" not in st.session_state:
+            st.session_state.budget_goals = {}
+
+        all_cats = engine.valid_categories
+
+        with st.expander("⚙️ Set Monthly Limits", expanded=False):
+            goal_inputs = {}
+            cols = st.columns(3)
+            for i, cat in enumerate(all_cats):
+                with cols[i % 3]:
+                    goal_inputs[cat] = st.number_input(
+                        cat,
+                        min_value=0.0,
+                        value=float(st.session_state.budget_goals.get(cat, 0.0)),
+                        step=50.0,
+                        format="%.0f",
+                        key=f"goal_{cat}",
+                    )
+            if st.button("💾  Save Goals", key="save_goals", type="primary"):
+                st.session_state.budget_goals = {
+                    cat: v for cat, v in goal_inputs.items() if v > 0
+                }
+                st.success("✓ Goals saved!")
+                st.rerun()
+
+        active_goals = {
+            cat: limit
+            for cat, limit in st.session_state.budget_goals.items()
+            if limit > 0
+        }
+        if active_goals:
+            budget_status = engine.get_budget_status(active_goals)
+            status_colors = {"ok": "#34c759", "warning": "#ff9500", "over": "#ff3b30"}
+
+            for cat, entry in budget_status.items():
+                col_name, col_bar, col_label = st.columns([2, 4, 2])
+                with col_name:
+                    st.markdown(
+                        f'<div style="padding-top:8px;font-weight:600">'
+                        f'{CAT_ICONS.get(cat,"💳")} {cat}</div>',
+                        unsafe_allow_html=True,
+                    )
+                with col_bar:
+                    pct_clamped = min(entry["pct"], 1.0)
+                    color       = status_colors[entry["status"]]
+                    st.markdown(
+                        f'<div style="background:#f2f2f7;border-radius:8px;height:12px;'
+                        f'margin-top:12px;overflow:hidden">'
+                        f'<div style="background:{color};width:{pct_clamped*100:.0f}%;'
+                        f'height:100%;border-radius:8px;transition:width .3s"></div>'
+                        f'</div>',
+                        unsafe_allow_html=True,
+                    )
+                with col_label:
+                    st.markdown(
+                        f'<div style="padding-top:6px;font-size:13px;text-align:right">'
+                        f'${entry["spent"]:,.0f} / ${entry["limit"]:,.0f}</div>',
+                        unsafe_allow_html=True,
+                    )
+
+            if llm is not None:
+                st.markdown("")
+                if st.button("💡 Get AI Budget Advice", key="budget_advice_btn"):
+                    with st.spinner("Analysing budget…"):
+                        advice_prompt = (
+                            f"Budget status: {budget_status}. "
+                            "In one short paragraph, give practical advice on the "
+                            "categories that are at risk or over limit."
+                        )
+                        try:
+                            resp = llm.client.chat(
+                                model="command-r-08-2024",
+                                messages=[{"role": "user", "content": advice_prompt}],
+                                temperature=0.2,
+                            )
+                            from models.llm_engine import _extract_text
+                            advice_text = _extract_text(resp.message.content)
+                        except Exception as exc:
+                            advice_text = f"Could not generate advice: {exc}"
+                    st.session_state["budget_advice"] = advice_text
+
+                if "budget_advice" in st.session_state:
+                    st.info(st.session_state["budget_advice"])
+        else:
+            st.info("No budget limits set yet. Expand 'Set Monthly Limits' above to get started.")
+
 
 # ──────────────────────────────────────────────────────────────────────
 # TAB 3 — AI ASSISTANT
 # ──────────────────────────────────────────────────────────────────────
 with tab_chat:
-    llm, rag = load_ai()
-
     if llm is None:
         st.warning("""
 **AI Assistant requires a Cohere API key.**
@@ -709,33 +954,205 @@ your **card terms & fees** (via RAG over the docs in `docs/card_terms/`).
 
         if query:
             with st.spinner("Thinking…"):
-                answer, new_hist, tools_used, route = llm.chat(
+                answer, new_hist, tools_used, route, confidence = llm.chat(
                     query, st.session_state.chat_history
                 )
             st.session_state.chat_history = new_hist
             st.session_state.tool_log.extend(tools_used)
             st.session_state.display_msgs.append({"role": "user", "content": query})
             st.session_state.display_msgs.append({
-                "role": "bot", "content": answer, "route": route
+                "role": "bot", "content": answer, "route": route, "confidence": confidence
             })
             st.rerun()
 
         # Tool log
         if st.session_state.tool_log:
+            last_conf = "high"
+            for m in reversed(st.session_state.display_msgs):
+                if m["role"] == "bot":
+                    last_conf = m.get("confidence", "high")
+                    break
+            conf_colors = {"high": "#34c759", "medium": "#ff9500", "low": "#ff3b30"}
+            conf_color  = conf_colors.get(last_conf, "#8e8e93")
+            conf_badge  = (
+                f'<span style="background:{conf_color};color:white;padding:2px 8px;'
+                f'border-radius:10px;font-size:10px;font-weight:700;'
+                f'text-transform:uppercase">{last_conf} confidence</span>'
+            )
             with st.expander(
                 f"🔧 Tool calls  ({len(st.session_state.tool_log)} total)",
                 expanded=False,
             ):
+                st.markdown(conf_badge, unsafe_allow_html=True)
+                st.markdown("")
                 for name, args, result in reversed(st.session_state.tool_log[-6:]):
-                    st.markdown(f"**`{name}`** · args: `{args}`")
-                    st.code(str(result)[:500], language=None)
-                    st.markdown("---")
+                    if not name.startswith("_"):
+                        st.markdown(f"**`{name}`** · args: `{args}`")
+                        st.code(str(result)[:500], language=None)
+                        st.markdown("---")
 
         if st.button("🗑️  Clear conversation", key="clear_chat"):
             st.session_state.chat_history = []
             st.session_state.tool_log     = []
             st.session_state.display_msgs = []
             st.rerun()
+
+        # ── AI Financial Strategist
+        st.divider()
+        st.markdown("### 🎯 AI Financial Strategist")
+        st.caption(
+            "Generate a structured financial strategy with urgency level, "
+            "recommended actions, and risk analysis."
+        )
+
+        STRATEGY_TOPICS = [
+            "Reduce Food & Dining spend",
+            "Optimise card usage across sources",
+            "Flag and review unusual activity",
+            "Lower monthly spending variance",
+            "Improve category diversification",
+            "Custom topic…",
+        ]
+
+        col_topic, col_btn = st.columns([3, 1])
+        with col_topic:
+            selected_topic = st.selectbox(
+                "Strategy topic", STRATEGY_TOPICS, key="strategy_topic_select"
+            )
+            if selected_topic == "Custom topic…":
+                topic = st.text_input("Enter your topic", key="custom_topic_input")
+            else:
+                topic = selected_topic
+
+        with col_btn:
+            st.write("")
+            st.write("")
+            gen_btn = st.button(
+                "Generate", type="primary",
+                use_container_width=True, key="gen_strategy_btn"
+            )
+
+        if gen_btn and topic and topic != "Custom topic…":
+            with st.spinner("Generating strategy…"):
+                strategy_data = llm.generate_strategy(topic)
+            import hashlib
+            strategy_id = hashlib.md5(
+                (topic + datetime.now().isoformat()).encode()
+            ).hexdigest()[:8]
+            st.session_state["last_strategy"] = {
+                "id": strategy_id, "topic": topic, "data": strategy_data
+            }
+
+        if "last_strategy" in st.session_state:
+            s    = st.session_state["last_strategy"]
+            data = s["data"]
+            sid  = s["id"]
+
+            if "error" in data:
+                st.error(
+                    f"Strategy could not be generated — try rephrasing. "
+                    f"({data['error']})"
+                )
+            else:
+                urgency        = data.get("urgency", "medium")
+                urgency_colors = {
+                    "low": "#34c759", "medium": "#ff9500", "high": "#ff3b30"
+                }
+                uc = urgency_colors.get(urgency, "#8e8e93")
+
+                # ── AI Narrative block (conversational recommendation)
+                narrative = data.get("narrative", "")
+                if narrative:
+                    st.markdown(
+                        f'<div style="background:linear-gradient(135deg,#007aff18,#5856d612);'
+                        f'border-left:4px solid #007aff;border-radius:14px;'
+                        f'padding:18px 22px;margin-bottom:18px">'
+                        f'<div style="font-size:10px;text-transform:uppercase;letter-spacing:.6px;'
+                        f'color:#007aff;font-weight:700;margin-bottom:8px">💡 AI Recommendation</div>'
+                        f'<div style="font-size:15px;line-height:1.65;color:#1c1c1e">{narrative}</div>'
+                        f'</div>',
+                        unsafe_allow_html=True,
+                    )
+
+                actions_html = "".join(
+                    f'<div style="padding:4px 0">• {a}</div>'
+                    for a in data["actions"]
+                )
+                tp_html = "".join(
+                    f'<div style="padding:4px 0">💬 {t}</div>'
+                    for t in data["talking_points"]
+                )
+                st.markdown(f"""
+<div class="panel">
+  <div style="display:flex;align-items:center;gap:12px;margin-bottom:14px">
+    <span style="background:{uc};color:white;padding:4px 12px;border-radius:20px;
+          font-size:11px;font-weight:700;text-transform:uppercase">{urgency} urgency</span>
+    <span style="font-weight:700;font-size:15px">{s['topic']}</span>
+  </div>
+  <div style="margin-bottom:12px">
+    <div style="font-size:10px;text-transform:uppercase;letter-spacing:.5px;
+         color:#8e8e93;margin-bottom:4px">Root Cause</div>
+    <div>{data['root_cause']}</div>
+  </div>
+  <div style="margin-bottom:12px">
+    <div style="font-size:10px;text-transform:uppercase;letter-spacing:.5px;
+         color:#8e8e93;margin-bottom:4px">Recommended Actions</div>
+    {actions_html}
+  </div>
+  <div style="margin-bottom:12px">
+    <div style="font-size:10px;text-transform:uppercase;letter-spacing:.5px;
+         color:#8e8e93;margin-bottom:4px">Talking Points</div>
+    {tp_html}
+  </div>
+  <div style="background:#fff5f5;border-left:3px solid #ff3b30;
+       border-radius:8px;padding:10px 14px">
+    <div style="font-size:10px;text-transform:uppercase;letter-spacing:.5px;
+         color:#8e8e93;margin-bottom:4px">Risk Warning</div>
+    <div>{data['risk_warning']}</div>
+  </div>
+</div>""", unsafe_allow_html=True)
+
+                # Feedback buttons
+                if "strategy_ratings" not in st.session_state:
+                    st.session_state.strategy_ratings = []
+                already_rated = any(
+                    r["strategy_id"] == sid
+                    for r in st.session_state.strategy_ratings
+                )
+
+                col_up, col_down, col_stat = st.columns([1, 1, 4])
+                if not already_rated:
+                    with col_up:
+                        if st.button("👍 Helpful", key=f"up_{sid}"):
+                            st.session_state.strategy_ratings.append({
+                                "strategy_id": sid,
+                                "topic":       s["topic"],
+                                "rating":      "up",
+                                "timestamp":   datetime.now().isoformat(),
+                            })
+                            st.rerun()
+                    with col_down:
+                        if st.button("👎 Not helpful", key=f"down_{sid}"):
+                            st.session_state.strategy_ratings.append({
+                                "strategy_id": sid,
+                                "topic":       s["topic"],
+                                "rating":      "down",
+                                "timestamp":   datetime.now().isoformat(),
+                            })
+                            st.rerun()
+                else:
+                    with col_up:
+                        st.caption("✓ Rated")
+
+                ratings = st.session_state.strategy_ratings
+                if ratings:
+                    helpful = sum(1 for r in ratings if r["rating"] == "up")
+                    total   = len(ratings)
+                    pct     = int(helpful / total * 100)
+                    with col_stat:
+                        st.caption(
+                            f"📊 {helpful} of {total} strategies rated helpful ({pct}%)"
+                        )
 
 
 # ──────────────────────────────────────────────────────────────────────
@@ -770,7 +1187,9 @@ with tab_lab:
     if run_eval:
         with st.spinner("Evaluating TF-IDF…"):
             try:
-                tfidf_res = evaluate_categorizer(TFIDFCategorizer(engine.df), engine.df, sample_size)
+                # Use shared categorizer so any manual training is reflected
+                tfidf_cat = st.session_state.get("shared_tfidf", TFIDFCategorizer())
+                tfidf_res = evaluate_categorizer(tfidf_cat, engine.df, sample_size)
                 st.session_state["tfidf_res"] = tfidf_res
 
                 if not tfidf_only:
@@ -778,7 +1197,7 @@ with tab_lab:
                     if api_key and not api_key.startswith("your_"):
                         with st.spinner("Evaluating Cohere Embeddings…"):
                             embed_res = evaluate_categorizer(
-                                EmbeddingCategorizer(engine.df), engine.df, sample_size
+                                EmbeddingCategorizer(), engine.df, sample_size
                             )
                             st.session_state["embed_res"] = embed_res
                     else:
@@ -788,6 +1207,7 @@ with tab_lab:
                     st.session_state.pop("embed_res", None)
 
                 st.success("✓ Evaluation complete!")
+                st.session_state["eval_timestamp"] = datetime.now().strftime("%d %b %Y · %H:%M")
             except Exception as exc:
                 st.error(f"Evaluation failed: {exc}")
 
@@ -829,6 +1249,8 @@ with tab_lab:
             yaxis=dict(range=[0, 1]),
         )
         st.plotly_chart(fig_pc, use_container_width=True)
+        if "eval_timestamp" in st.session_state:
+            st.caption(f"Last evaluated: {st.session_state['eval_timestamp']}")
 
     st.divider()
 
@@ -836,19 +1258,42 @@ with tab_lab:
     st.markdown("#### 2 · Uncertain Transactions  *(Human-in-the-Loop)*")
     st.caption(
         "Transactions where TF-IDF cosine similarity is below the confidence "
-        "threshold — review and confirm or correct."
+        "threshold — review and confirm or correct. Corrections persist for the session."
     )
 
+    # Shared categorizer — persists across scans and manual training
+    if "shared_tfidf" not in st.session_state:
+        st.session_state.shared_tfidf = TFIDFCategorizer()
+    if "training_log" not in st.session_state:
+        st.session_state.training_log = []
+
+    all_cats_lab = sorted(engine.df["Category"].unique().tolist())
+
+    # Training history badge
+    n_trained = len(st.session_state.training_log)
+    if n_trained:
+        st.success(
+            f"✅ {n_trained} correction(s) applied this session — "
+            "model knowledge base updated in real time."
+        )
+        with st.expander("View training history"):
+            for entry in st.session_state.training_log:
+                st.caption(
+                    f"• **{entry['description']}**  →  {entry['category']}"
+                    f"  ·  {entry['timestamp'][:16].replace('T', ' ')}"
+                )
+
     if st.button("🔍  Scan for Uncertain Transactions", key="scan_unc"):
-        cat    = TFIDFCategorizer(engine.df)
         sample = engine.df.sample(min(200, len(engine.df)), random_state=42)
         found  = []
         for _, row in sample.iterrows():
-            pred, conf, flagged = cat.predict(row["Raw_Description"])
+            pred, conf, flagged = st.session_state.shared_tfidf.predict(
+                row["Raw_Description"]
+            )
             if flagged:
                 found.append({
                     "desc":  row["Raw_Description"],
-                    "truth": row["Category"],
+                    "current": row["Category"],
                     "pred":  pred,
                     "conf":  conf,
                 })
@@ -858,18 +1303,46 @@ with tab_lab:
         unc = st.session_state["uncertain"]
         if unc:
             st.info(f"Found **{len(unc)}** uncertain transaction(s) in the sample.")
-            for i, item in enumerate(unc[:8]):
+            for i, item in enumerate(unc[:10]):
                 with st.expander(
                     f"⚠️  {item['desc']}  ·  predicted: **{item['pred']}**",
                     expanded=False,
                 ):
-                    c1, c2, c3 = st.columns(3)
-                    c1.write(f"**Ground truth:** {item['truth']}")
-                    c2.write(f"**AI prediction:** {item['pred']}")
                     conf_val = min(float(item["conf"]), 1.0)
+                    c1, c2, c3 = st.columns([2, 2, 2])
+                    c1.write(f"**Current category:** {item['current']}")
+                    c2.write(f"**Model prediction:** {item['pred']}")
                     c3.progress(conf_val, text=f"Confidence: {conf_val:.0%}")
-                    if st.button("✅  Confirm prediction", key=f"conf_{i}"):
-                        st.success("Training data updated!")
+
+                    col_sel, col_btn = st.columns([3, 1])
+                    with col_sel:
+                        default_idx = (
+                            all_cats_lab.index(item["pred"])
+                            if item["pred"] in all_cats_lab else 0
+                        )
+                        chosen_cat = st.selectbox(
+                            "Set correct category",
+                            all_cats_lab,
+                            index=default_idx,
+                            key=f"fix_cat_{i}",
+                        )
+                    with col_btn:
+                        st.write("")
+                        st.write("")
+                        if st.button("✅ Apply", key=f"apply_{i}",
+                                     use_container_width=True):
+                            st.session_state.shared_tfidf.train(
+                                item["desc"], chosen_cat
+                            )
+                            st.session_state.training_log.append({
+                                "description": item["desc"],
+                                "category":    chosen_cat,
+                                "timestamp":   datetime.now().isoformat(),
+                            })
+                            st.success(
+                                f"✓ Trained: '{item['desc']}' → '{chosen_cat}'"
+                            )
+                            st.rerun()
         else:
             st.success("✓ No uncertain transactions found in the sample.")
 
@@ -877,22 +1350,24 @@ with tab_lab:
 
     # ── Section 3 — Manual training
     st.markdown("#### 3 · Manual Training")
-    st.caption("Override the model's classification for a specific merchant description.")
+    st.caption("Override the model's classification for any merchant description.")
 
-    all_cats  = sorted(engine.df["Category"].unique().tolist())
     all_descs = sorted(engine.df["Raw_Description"].unique().tolist())
 
     col_d, col_c, col_b = st.columns([2, 1, 1])
     with col_d:
         target_desc = st.selectbox("Select description", all_descs, key="train_desc")
     with col_c:
-        manual_cat  = st.selectbox("Correct category",  all_cats,  key="train_cat")
+        manual_cat  = st.selectbox("Correct category", all_cats_lab, key="train_cat")
     with col_b:
         st.write(" ")
         if st.button("🚀  Train Model", use_container_width=True, key="train_btn"):
-            if "manual_tfidf" not in st.session_state:
-                st.session_state.manual_tfidf = TFIDFCategorizer()
-            st.session_state.manual_tfidf.train(target_desc, manual_cat)
+            st.session_state.shared_tfidf.train(target_desc, manual_cat)
+            st.session_state.training_log.append({
+                "description": target_desc,
+                "category":    manual_cat,
+                "timestamp":   datetime.now().isoformat(),
+            })
             st.success(f"✓  '{target_desc}'  →  '{manual_cat}'")
             st.balloons()
 
@@ -901,4 +1376,4 @@ with tab_lab:
 # FOOTER
 # ══════════════════════════════════════════════════════════════════════
 st.markdown("---")
-st.caption("Smart Wallet · Prototype v2 · Powered by Cohere · Built with Streamlit")
+st.caption("Smart Wallet · Prototype v3 · Powered by Cohere · Built with Streamlit")

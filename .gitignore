@@ -16,7 +16,14 @@ __pycache__/
 
 # MACOS
 .DS_Store
+*.icloud
+Screenshot*.png
 
 # IDE
 .vscode/
 .idea/
+CLAUDE.md
+CLAUDE.local.md
+
+# Internal planning docs
+docs/superpowers/

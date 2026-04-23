@@ -46,9 +46,9 @@ flowchart TD
 
 ## Product Overview
 
-Smart Wallet is a multi-source financial dashboard that aggregates transaction data across five payment instruments — **Visa Classic**, **Mastercard Gold**, **Revolut**, **PayPal**, and **Trade Republic** — into a single, filterable interface. It surfaces spending breakdowns, monthly trends, top-merchant rankings, and anomaly detection without requiring the user to switch between separate banking apps.
+Smart Wallet is a multi-source AI financial dashboard that aggregates transaction data across **live bank accounts** (via TrueLayer sandbox OAuth2) and **Kaggle CSV** data (Revolut, Visa Classic) simultaneously — the same model as Google Pay or Apple Wallet. It surfaces spending breakdowns, monthly trends, top-merchant rankings, and anomaly detection in a single filterable interface.
 
-On top of the analytics layer sits a two-route AI assistant powered by the Cohere API. Transaction questions (e.g. "How much did I spend on food last month?") are answered in real time through structured tool calls against the underlying dataset. Questions about card fees, benefits, or terms (e.g. "What are Revolut's foreign transaction fees?") are answered through RAG over curated card-terms documents, with the model quoting only information present in the source files. A dedicated AI Lab tab lets users evaluate and compare two categorisation models and correct low-confidence predictions through a human-in-the-loop interface.
+On top of the analytics layer sits a two-route AI assistant powered by the Cohere API. Transaction questions (e.g. "How much did I spend on food last month?") are answered in real time through structured tool calls against the underlying dataset. Questions about card fees, benefits, or terms (e.g. "What are Revolut's foreign transaction fees?") are answered through RAG over curated card-terms documents, with the model quoting only information present in the source files. An AI Strategist tab generates actionable financial plans per topic, with a thumbs up/down feedback loop that tracks helpfulness over time. A dedicated AI Lab tab lets users evaluate and compare two categorisation models and correct low-confidence predictions through a human-in-the-loop interface.
 
 ---
 
@@ -141,11 +141,15 @@ digital-wallet-prototype/
 │       ├── trade_republic_terms.txt # Trade Republic interest, cashback, fees
 │       └── visa_mastercard_terms.txt# Visa Classic & Mastercard Gold terms
 ├── models/
+│   ├── bank_connector.py        # TrueLayerAdapter — OAuth2, token refresh, transaction fetch
 │   ├── categorizer.py           # TFIDFCategorizer + EmbeddingCategorizer
 │   ├── evaluator.py             # Precision / recall / F1 evaluation harness
 │   ├── llm_engine.py            # Cohere ClientV2 agentic loop + tool dispatch
 │   ├── rag_engine.py            # FAISS RAG engine over card-terms docs
 │   └── wallet_engine.py         # Six LLM-callable tools over transactions.csv
+├── tests/
+│   ├── test_bank_connector.py   # TrueLayerAdapter unit tests (auth, schema, dedup)
+│   └── test_wallet_engine.py    # WalletEngine unit tests (95 tests total)
 ├── .env.example                 # API key template — copy to .env
 ├── .gitignore
 ├── app.py                       # Streamlit UI — 4 tabs
@@ -188,13 +192,16 @@ cp .env.example .env
 
 ### Streamlit Cloud deployment
 
-Add your Cohere API key in **Manage app → Secrets**:
+Add keys in **Manage app → Secrets**:
 
 ```toml
-COHERE_API_KEY = "your_key_here"
+COHERE_API_KEY          = "your_key_here"
+TRUELAYER_CLIENT_ID     = "your_truelayer_client_id"
+TRUELAYER_CLIENT_SECRET = "your_truelayer_client_secret"
+TRUELAYER_REFRESH_TOKEN = "your_refresh_token"
 ```
 
-No Kaggle credentials are needed on Streamlit Cloud — `data/processed/transactions.csv` is committed to the repository.
+No Kaggle credentials are needed on Streamlit Cloud — `data/processed/transactions.csv` is committed to the repository. Without TrueLayer credentials the app degrades gracefully to CSV-only mode.
 
 ---
 
@@ -233,10 +240,10 @@ Both models are seeded from the full merchant→category mapping extracted from 
 
 ## Live Demo
 
-[**→ Open on Streamlit Cloud**](https://digital-wallet-prototype.streamlit.app)
+[**→ Open on Streamlit Cloud**](https://digitalwalletprototype-26r8y6nikossaxzzff47if.streamlit.app/)
 
 > The live demo requires a valid `COHERE_API_KEY` to be set in Streamlit Cloud Secrets. Without it, the **AI Assistant** and **Cohere Embeddings** evaluation mode are disabled; all other tabs remain fully functional.
 
 ---
 
-*Smart Wallet · Prototype v2 · Powered by Cohere · Built with Streamlit*
+*Smart Wallet · Prototype v3 · Powered by Cohere + TrueLayer · Built with Streamlit*
